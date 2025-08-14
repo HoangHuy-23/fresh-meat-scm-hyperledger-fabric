@@ -1,0 +1,168 @@
+# network/configtx.yaml
+
+Organizations:
+  - &OrdererOrg
+    Name: OrdererMSP
+    ID: OrdererMSP
+    MSPDir: ./crypto-config/ordererOrganizations/example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('OrdererMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('OrdererMSP.admin')"
+
+  - &MeatSupplyOrg
+    Name: MeatSupplyOrgMSP
+    ID: MeatSupplyOrgMSP
+    MSPDir: ./crypto-config/peerOrganizations/meatsupply.example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('MeatSupplyOrgMSP.admin', 'MeatSupplyOrgMSP.peer', 'MeatSupplyOrgMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('MeatSupplyOrgMSP.admin', 'MeatSupplyOrgMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('MeatSupplyOrgMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('MeatSupplyOrgMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.meatsupply.example.com
+        Port: 7051
+
+  - &RegulatorOrg
+    Name: RegulatorOrgMSP
+    ID: RegulatorOrgMSP
+    MSPDir: ./crypto-config/peerOrganizations/regulator.example.com/msp
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.admin', 'RegulatorOrgMSP.peer', 'RegulatorOrgMSP.client')"
+      Writers:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.admin', 'RegulatorOrgMSP.client')"
+      Admins:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('RegulatorOrgMSP.peer')"
+    AnchorPeers:
+      - Host: peer0.regulator.example.com
+        Port: 9051
+
+Capabilities:
+  Channel: &ChannelCapabilities
+    V2_0: true
+  Orderer: &OrdererCapabilities
+    V2_0: true
+  Application: &ApplicationCapabilities
+    V2_5: true
+
+Application: &ApplicationDefaults
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    LifecycleEndorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+    Endorsement:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Endorsement"
+  Capabilities:
+    <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+  OrdererType: etcdraft
+  EtcdRaft:
+    Consenters:
+      - Host: orderer1.meatsupply.example.com
+        Port: 7050
+        ClientTLSCert: ./crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/tls/server.crt
+        ServerTLSCert: ./crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/tls/server.crt
+      - Host: orderer2.meatsupply.example.com
+        Port: 8050
+        ClientTLSCert: ./crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/tls/server.crt
+        ServerTLSCert: ./crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/tls/server.crt
+      - Host: orderer3.regulator.example.com
+        Port: 9050
+        ClientTLSCert: ./crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/tls/server.crt
+        ServerTLSCert: ./crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/tls/server.crt
+  Addresses:
+    - orderer1.meatsupply.example.com:7050
+    - orderer2.meatsupply.example.com:8050
+    - orderer3.regulator.example.com:9050
+  BatchTimeout: 2s
+  BatchSize:
+    MaxMessageCount: 10
+    AbsoluteMaxBytes: 99 MB
+    PreferredMaxBytes: 512 KB
+  Organizations:
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+
+Channel: &ChannelDefaults
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+  Capabilities:
+    <<: *ChannelCapabilities
+
+Profiles:
+  TwoOrgsOrdererGenesis:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      Organizations:
+        - *OrdererOrg
+      Capabilities:
+        <<: *OrdererCapabilities
+    Consortiums:
+      SampleConsortium:
+        Organizations:
+          - *MeatSupplyOrg
+          - *RegulatorOrg
+  TwoOrgsChannel:
+    <<: *ChannelDefaults
+    # === SỬA LỖI CONSORTIUM ===
+    Consortium: SampleConsortium
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *MeatSupplyOrg
+        - *RegulatorOrg
+      Capabilities:
+        <<: *ApplicationCapabilities

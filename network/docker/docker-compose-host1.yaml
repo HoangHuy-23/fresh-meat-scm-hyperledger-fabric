@@ -1,0 +1,128 @@
+# network/docker/docker-compose-host1.yaml
+version: '3.7'
+
+volumes:
+  peer0.meatsupply.example.com:
+  orderer1.meatsupply.example.com:
+  orderer2.meatsupply.example.com:
+
+networks:
+  meatsupply_net:
+    name: meatsupply_net
+
+services:
+  peer0.meatsupply.example.com:
+    container_name: peer0.meatsupply.example.com
+    image: hyperledger/fabric-peer:${IMAGE_TAG}
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=fabric_meat_scm_meatsupply_net
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_PROFILE_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_ID=peer0.meatsupply.example.com
+      - CORE_PEER_ADDRESS=peer0.meatsupply.example.com:${PEER0_ORG1_PORT}
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:${PEER0_ORG1_PORT}
+      - CORE_PEER_CHAINCODEADDRESS=peer0.meatsupply.example.com:7052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.meatsupply.example.com:${PEER0_ORG1_PORT}
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.meatsupply.example.com:${PEER0_ORG1_PORT}
+      - CORE_PEER_LOCALMSPID=MeatSupplyOrgMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:${PEER0_ORG1_OPERATIONS_PORT}
+      - CORE_METRICS_PROVIDER=prometheus
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb0.meatsupply:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - ../crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com:/etc/hyperledger/fabric
+      - peer0.meatsupply.example.com:/var/hyperledger/production
+    ports:
+      - ${PEER0_ORG1_PORT}:${PEER0_ORG1_PORT}
+      - ${PEER0_ORG1_OPERATIONS_PORT}:${PEER0_ORG1_OPERATIONS_PORT}
+    networks:
+      - meatsupply_net
+    depends_on:
+      - couchdb0.meatsupply
+
+  couchdb0.meatsupply:
+    container_name: couchdb0.meatsupply
+    image: couchdb:3.3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "5984:5984" # For internal access only
+    networks:
+      - meatsupply_net
+
+  orderer1.meatsupply.example.com:
+    container_name: orderer1.meatsupply.example.com
+    image: hyperledger/fabric-orderer:${IMAGE_TAG}
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=${ORDERER1_PORT}
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=none
+      - ORDERER_CHANNELPARTICIPATION_ENABLED=true
+      - ORDERER_ADMIN_TLS_ENABLED=true
+      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:${ORDERER1_OPERATIONS_PORT}
+      - ORDERER_OPERATIONS_METRICS_PROVIDER=prometheus
+    volumes:
+      - ../crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com:/var/hyperledger/orderer
+      - orderer1.meatsupply.example.com:/var/hyperledger/production/orderer
+    ports:
+      - ${ORDERER1_PORT}:${ORDERER1_PORT}
+      - ${ORDERER1_OPERATIONS_PORT}:${ORDERER1_OPERATIONS_PORT}
+    networks:
+      - meatsupply_net
+
+  orderer2.meatsupply.example.com:
+    container_name: orderer2.meatsupply.example.com
+    image: hyperledger/fabric-orderer:${IMAGE_TAG}
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=${ORDERER2_PORT}
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=none
+      - ORDERER_CHANNELPARTICIPATION_ENABLED=true
+      - ORDERER_ADMIN_TLS_ENABLED=true
+      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:${ORDERER2_OPERATIONS_PORT}
+      - ORDERER_OPERATIONS_METRICS_PROVIDER=prometheus
+    volumes:
+      - ../crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com:/var/hyperledger/orderer
+      - orderer2.meatsupply.example.com:/var/hyperledger/production/orderer
+    ports:
+      - ${ORDERER2_PORT}:${ORDERER2_PORT}
+      - ${ORDERER2_OPERATIONS_PORT}:${ORDERER2_OPERATIONS_PORT}
+    networks:
+      - meatsupply_net

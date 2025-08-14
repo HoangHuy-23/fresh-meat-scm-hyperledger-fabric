@@ -1,0 +1,29 @@
+# network/docker/docker-compose-ca.yaml
+version: '3.7'
+
+services:
+  ca_meatsupply:
+    image: hyperledger/fabric-ca:1.5.7 # Sử dụng CA_IMAGE_TAG từ .env
+    container_name: ca.meatsupply.example.com
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    environment:
+      - FABRIC_CA_SERVER_CA_NAME=ca.meatsupply.example.com
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=7054
+    ports:
+      - "7054:7054"
+    volumes:
+      - ../crypto-config/fabric-ca/meatsupply:/etc/hyperledger/fabric-ca-server
+
+  ca_regulator:
+    image: hyperledger/fabric-ca:1.5.7 # Sử dụng CA_IMAGE_TAG từ .env
+    container_name: ca.regulator.example.com
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    environment:
+      - FABRIC_CA_SERVER_CA_NAME=ca.regulator.example.com
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=8054
+    ports:
+      - "8054:8054"
+    volumes:
+      - ../crypto-config/fabric-ca/regulator:/etc/hyperledger/fabric-ca-server

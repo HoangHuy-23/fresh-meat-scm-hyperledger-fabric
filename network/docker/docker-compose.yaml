@@ -1,0 +1,238 @@
+# network/docker/docker-compose.yaml
+version: '3.7'
+
+volumes:
+  peer0.meatsupply.example.com:
+  orderer1.meatsupply.example.com:
+  orderer2.meatsupply.example.com:
+  peer0.regulator.example.com:
+  orderer3.regulator.example.com:
+
+networks:
+  meat_network:
+    name: meat_network
+
+services:
+  # ------------------ MeatSupplyOrg Nodes ------------------
+  peer0.meatsupply.example.com:
+    container_name: peer0.meatsupply.example.com
+    image: hyperledger/fabric-peer:2.5.5
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_ID=peer0.meatsupply.example.com
+      - CORE_PEER_ADDRESS=peer0.meatsupply.example.com:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.meatsupply.example.com:7052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.meatsupply.example.com:7051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.meatsupply.example.com:7051
+      - CORE_PEER_LOCALMSPID=MeatSupplyOrgMSP
+      - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:9443
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb0.meatsupply:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_TLS_CLIENTAUTHREQUIRED=false
+      - CORE_PEER_TLS_CLIENTROOTCAS=[/etc/hyperledger/fabric/tls/ca.crt]
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=meat_network
+    volumes:
+      - ../../network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com:/etc/hyperledger/fabric
+      - ../../network/crypto-config/peerOrganizations/regulator.example.com/peers/peer0.regulator.example.com/tls/ca.crt:/etc/hyperledger/fabric/tls/ca-regulator.crt
+      - peer0.meatsupply.example.com:/var/hyperledger/production
+      - /var/run/docker.sock:/host/var/run/docker.sock
+    ports:
+      - 7051:7051
+      - 9443:9443
+    networks:
+      - meat_network
+    depends_on:
+      - couchdb0.meatsupply
+
+  couchdb0.meatsupply:
+    image: couchdb:3.3.3
+    container_name: couchdb0.meatsupply
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "5984:5984"
+    networks:
+      - meat_network
+
+  # ------------------ RegulatorOrg Nodes ------------------
+  peer0.regulator.example.com:
+    container_name: peer0.regulator.example.com
+    image: hyperledger/fabric-peer:2.5.5
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_ID=peer0.regulator.example.com
+      - CORE_PEER_ADDRESS=peer0.regulator.example.com:9051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:9051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.regulator.example.com:9052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:9052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0.regulator.example.com:9051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.regulator.example.com:9051
+      - CORE_PEER_LOCALMSPID=RegulatorOrgMSP
+      - CORE_OPERATIONS_LISTENADDRESS=0.0.0.0:9444
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb0.regulator:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_TLS_CLIENTAUTHREQUIRED=false
+      - CORE_PEER_TLS_CLIENTROOTCAS=[/etc/hyperledger/fabric/tls/ca.crt]
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=meat_network
+    volumes:
+      - ../../network/crypto-config/peerOrganizations/regulator.example.com/peers/peer0.regulator.example.com:/etc/hyperledger/fabric
+      - ../../network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt:/etc/hyperledger/fabric/tls/ca-meatsupply.crt
+      - peer0.regulator.example.com:/var/hyperledger/production
+      - /var/run/docker.sock:/host/var/run/docker.sock
+    ports:
+      - 9051:9051
+      - 9444:9444
+    networks:
+      - meat_network
+    depends_on:
+      - couchdb0.regulator
+
+  couchdb0.regulator:
+    image: couchdb:3.3.3
+    container_name: couchdb0.regulator
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "6984:5984"
+    networks:
+      - meat_network
+
+  # ------------------ Ordering Service Nodes ------------------
+  orderer1.meatsupply.example.com:
+    container_name: orderer1.meatsupply.example.com
+    image: hyperledger/fabric-orderer:2.5.5
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_BOOTSTRAPFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_CHANNELPARTICIPATION_ENABLED=true
+      - ORDERER_ADMIN_TLS_ENABLED=true
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:9440
+      # === SỬA LỖI ADMIN SERVER ===
+      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    volumes:
+      # === SỬA LỖI VOLUME MOUNT CHO ORDERER ===
+      - ../../network/channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - ../../network/crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/msp:/var/hyperledger/orderer/msp
+      - ../../network/crypto-config/ordererOrganizations/example.com/orderers/orderer1.meatsupply.example.com/tls:/var/hyperledger/orderer/tls
+      - orderer1.meatsupply.example.com:/var/hyperledger/production/orderer
+    ports:
+      - 7050:7050
+      - 9440:9440
+    networks:
+      - meat_network
+
+  orderer2.meatsupply.example.com:
+    container_name: orderer2.meatsupply.example.com
+    image: hyperledger/fabric-orderer:2.5.5
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=8050
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_BOOTSTRAPFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_CHANNELPARTICIPATION_ENABLED=true
+      - ORDERER_ADMIN_TLS_ENABLED=true
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:9441
+      # === SỬA LỖI ADMIN SERVER ===
+      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    volumes:
+      # === SỬA LỖI VOLUME MOUNT CHO ORDERER ===
+      - ../../network/channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - ../../network/crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/msp:/var/hyperledger/orderer/msp
+      - ../../network/crypto-config/ordererOrganizations/example.com/orderers/orderer2.meatsupply.example.com/tls:/var/hyperledger/orderer/tls
+      - orderer2.meatsupply.example.com:/var/hyperledger/production/orderer
+    ports:
+      - 8050:8050
+      - 9441:9441
+    networks:
+      - meat_network
+
+  orderer3.regulator.example.com:
+    container_name: orderer3.regulator.example.com
+    image: hyperledger/fabric-orderer:2.5.5
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=9050
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_BOOTSTRAPFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_CHANNELPARTICIPATION_ENABLED=true
+      - ORDERER_ADMIN_TLS_ENABLED=true
+      - ORDERER_ADMIN_LISTENADDRESS=0.0.0.0:9442
+      # === SỬA LỖI ADMIN SERVER ===
+      - ORDERER_ADMIN_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_ADMIN_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_ADMIN_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_ADMIN_TLS_CLIENTROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+    volumes:
+      # === SỬA LỖI VOLUME MOUNT CHO ORDERER ===
+      - ../../network/channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      - ../../network/crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/msp:/var/hyperledger/orderer/msp
+      - ../../network/crypto-config/ordererOrganizations/example.com/orderers/orderer3.regulator.example.com/tls:/var/hyperledger/orderer/tls
+      - orderer3.regulator.example.com:/var/hyperledger/production/orderer
+    ports:
+      - 9050:9050
+      - 9442:9442
+    networks:
+      - meat_network
+    extra_hosts:
+      - "orderer1.meatsupply.example.com:127.0.0.1"
+      - "orderer2.meatsupply.example.com:127.0.0.1"
+      - "peer0.meatsupply.example.com:127.0.0.1"
+      - "peer0.regulator.example.com:127.0.0.1"

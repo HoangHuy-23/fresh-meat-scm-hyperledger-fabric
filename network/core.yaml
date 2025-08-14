@@ -1,0 +1,98 @@
+# network/core.yaml
+
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+peer:
+  id: peer
+  networkId: dev
+  address: 127.0.0.1:7051
+  localMspId: MeatSupplyOrgMSP
+
+  # Logging configuration
+  logging:
+    level: info
+    format: "%{color}%{time:2006-01-02 15:04:05.000 MST} [%{module}] %{shortfunc} -> %{level:.4s} %{id:03x}%{color:reset} %{message}"
+
+  tls:
+    enabled: true
+    clientAuthRequired: false
+    cert:
+      file: tls/server.crt
+    key:
+      file: tls/server.key
+    rootcert:
+      file: tls/ca.crt
+
+    # Client TLS certificate and key for peer-to-peer communication
+    clientCert:
+      file: tls/server.crt
+    clientKey:
+      file: tls/server.key
+
+    # Root certificate for peer-to-peer communication
+    clientRootCAs:
+      files:
+        - tls/ca.crt
+
+  # Keystore for the peer's private key
+  keystore:
+    path: msp/keystore
+
+  # The security provider to use
+  BCCSP:
+    Default: SW
+    SW:
+      Hash: SHA2
+      Security: 256
+      FileKeyStore:
+        KeyStore:
+
+  # The MSP configuration for this peer
+  mspConfigPath: msp
+
+  # The operations server is used for health checks and metrics
+  operations:
+    listenAddress: 127.0.0.1:9443
+    tls:
+      enabled: false # Typically false for local CLI usage
+
+  # The gRPC server for this peer
+  listenAddress: 0.0.0.0:7051
+
+  # Chaincode execution configuration
+  chaincode:
+    # The gRPC server for chaincode to connect to
+    listenAddress: 0.0.0.0:7052
+
+# The location of the ledger data
+ledger:
+  state:
+    stateDatabase: CouchDB
+    couchDBConfig:
+      couchDBAddress: 127.0.0.1:5984
+      username:
+      password:
+      maxRetries: 3
+      maxRetriesOnStartup: 10
+      requestTimeout: 35s
+      queryLimit: 50000
+      maxBatchUpdateSize: 1000
+
+# Virtual machine configuration
+vm:
+  endpoint: unix:///var/run/docker.sock
+  docker:
+    tls:
+      enabled: false
+    attachStdout: true
+    hostConfig:
+      NetworkMode: host
+
+chaincode:
+  externalBuilders:
+    - name: ccaas_builder
+      path: /builders/ccaas/bin
+

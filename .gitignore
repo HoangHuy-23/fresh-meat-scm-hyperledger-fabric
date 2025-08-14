@@ -1,0 +1,20 @@
+# bin
+bin/
+
+# Build artifacts
+builders/
+
+# Channel artifacts
+network/channel-artifacts/
+
+# Generated crypto material
+network/crypto-config/
+
+# Docker images
+meatcc.tar.gz
+
+# env
+.env
+
+# Logs
+*.log
