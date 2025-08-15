@@ -331,9 +331,41 @@ func (s *SmartContract) AddEvent(ctx contractapi.TransactionContextInterface, as
 // CÁC HÀM QUERY (READ-ONLY)
 // ===============================================================
 
+// GetAssetWithFullHistory: Lấy thông tin chi tiết của một tài sản
+// và toàn bộ lịch sử của nó, bao gồm cả lịch sử của các lô cha.
+func (s *SmartContract) GetAssetWithFullHistory(ctx contractapi.TransactionContextInterface, assetID string) (*FullAssetTrace, error) {
+    // 1. Lấy thông tin của chính tài sản được yêu cầu
+    asset, err := s.readAsset(ctx, assetID)
+    if err != nil {
+        return nil, err
+    }
+
+    // 2. Lấy toàn bộ lịch sử đệ quy
+    fullHistory, err := s.getAssetHistoryRecursive(ctx, assetID) // Gọi hàm private
+    if err != nil {
+        return nil, err
+    }
+
+    // 3. Tạo đối tượng trả về hoàn chỉnh
+    traceResult := FullAssetTrace{
+        AssetID:        asset.AssetID,
+        ParentAssetIDs: asset.ParentAssetIDs,
+        ProductName:    asset.ProductName,
+        Status:         asset.Status,
+        FullHistory:    fullHistory,
+    }
+
+    return &traceResult, nil
+}
+
+// ===============================================================
+// CÁC HÀM TIỆN ÍCH (PRIVATE)
+// ===============================================================
+
+
 // GetAssetHistoryRecursive retrieves the full history of an asset, including its parents.
 // This function is read-only and does not submit a transaction.
-func (s *SmartContract) GetAssetHistoryRecursive(ctx contractapi.TransactionContextInterface, assetID string) ([]Event, error) {
+func (s *SmartContract) getAssetHistoryRecursive(ctx contractapi.TransactionContextInterface, assetID string) ([]Event, error) {
 	var fullHistory []Event
 	queue := []string{assetID}
 	processedIDs := make(map[string]bool)
@@ -368,9 +400,6 @@ func (s *SmartContract) GetAssetHistoryRecursive(ctx contractapi.TransactionCont
 	return fullHistory, nil
 }
 
-// ===============================================================
-// CÁC HÀM TIỆN ÍCH (PRIVATE)
-// ===============================================================
 
 // readAsset is a private helper function to read an asset from the ledger.
 func (s *SmartContract) readAsset(ctx contractapi.TransactionContextInterface, assetID string) (*MeatAsset, error) {
