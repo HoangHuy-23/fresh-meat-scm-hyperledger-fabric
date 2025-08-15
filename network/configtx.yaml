@@ -107,9 +107,9 @@ Orderer: &OrdererDefaults
     - orderer1.meatsupply.example.com:7050
     - orderer2.meatsupply.example.com:8050
     - orderer3.regulator.example.com:9050
-  BatchTimeout: 2s
+  BatchTimeout: 500ms
   BatchSize:
-    MaxMessageCount: 10
+    MaxMessageCount: 100
     AbsoluteMaxBytes: 99 MB
     PreferredMaxBytes: 512 KB
   Organizations:
