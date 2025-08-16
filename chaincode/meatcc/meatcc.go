@@ -1,5 +1,3 @@
-// blockchain/chaincode/meatcc/meatcc.go
-
 package main
 
 import (
@@ -11,7 +9,7 @@ import (
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// SmartContract provides functions for managing meat assets.
+// SmartContract provides functions for managing meat assets and shipments.
 type SmartContract struct {
 	contractapi.Contract
 }
@@ -20,14 +18,17 @@ type SmartContract struct {
 // CÁC CẤU TRÚC DỮ LIỆU
 // ===============================================================
 
-// MediaPointer defines a reference to an off-chain media file (e.g., on S3).
+type Quantity struct {
+	Unit  string  `json:"unit"`
+	Value float64 `json:"value"`
+}
+
 type MediaPointer struct {
 	S3Bucket string `json:"s3Bucket"`
 	S3Key    string `json:"s3Key"`
 	MimeType string `json:"mimeType"`
 }
 
-// FarmDetails captures information from the farming stage.
 type FarmDetails struct {
 	FarmOrgName  string         `json:"farmOrgName"`
 	FacilityName string         `json:"facilityName"`
@@ -38,14 +39,12 @@ type FarmDetails struct {
 	Certificates []MediaPointer `json:"certificates"`
 }
 
-// ProcessingStep defines a single step in the processing stage.
 type ProcessingStep struct {
 	Name      string `json:"name"`
 	Technique string `json:"technique"`
 	Timestamp string `json:"timestamp"`
 }
 
-// ProcessingDetails captures information from the processing stage.
 type ProcessingDetails struct {
 	ProcessorOrgName string           `json:"processorOrgName"`
 	FacilityName     string           `json:"facilityName"`
@@ -53,26 +52,12 @@ type ProcessingDetails struct {
 	Certificates     []MediaPointer   `json:"certificates"`
 }
 
-// ShipmentTimeline defines a point in time during a shipment.
 type ShipmentTimeline struct {
 	Type      string `json:"type"`
 	Timestamp string `json:"timestamp"`
 	Location  string `json:"location,omitempty"`
 }
 
-// ShipmentDetails captures information about a shipment.
-type ShipmentDetails struct {
-	ShipmentID     string             `json:"shipmentID"`
-	CarrierOrgName string             `json:"carrierOrgName"`
-	DriverName     string             `json:"driverName"`
-	VehiclePlate   string             `json:"vehiclePlate"`
-	FromFacility   string             `json:"fromFacility"`
-	ToFacility     string             `json:"toFacility"`
-	Status         string             `json:"status"`
-	Timeline       []ShipmentTimeline `json:"timeline"`
-}
-
-// StorageDetails captures information during storage (warehouse or retail).
 type StorageDetails struct {
 	OwnerOrgName    string `json:"ownerOrgName"`
 	FacilityName    string `json:"facilityName"`
@@ -81,14 +66,12 @@ type StorageDetails struct {
 	Note            string `json:"note"`
 }
 
-// SoldDetails captures information about the final sale.
 type SoldDetails struct {
 	RetailerOrgName string `json:"retailerOrgName"`
 	FacilityName    string `json:"facilityName"`
 	SaleTimestamp   string `json:"saleTimestamp"`
 }
 
-// Event captures a significant event in the asset's lifecycle.
 type Event struct {
 	Type      string      `json:"type"`
 	ActorMSP  string      `json:"actorMSP"`
@@ -97,101 +80,330 @@ type Event struct {
 	Details   interface{} `json:"details"`
 }
 
-// MeatAsset is the main object stored on the ledger.
 type MeatAsset struct {
-	ObjectType     string   `json:"docType"`
-	AssetID        string   `json:"assetID"`
-	ParentAssetIDs []string `json:"parentAssetIDs"`
-	ProductName    string   `json:"productName"`
-	Status         string   `json:"status"`
-	History        []Event  `json:"history"`
+	ObjectType       string   `json:"docType"`
+	AssetID          string   `json:"assetID"`
+	ParentAssetIDs   []string `json:"parentAssetIDs"`
+	ProductName      string   `json:"productName"`
+	Status           string   `json:"status"`
+	OriginalQuantity Quantity `json:"originalQuantity"`
+	CurrentQuantity  Quantity `json:"currentQuantity"`
+	History          []Event  `json:"history"`
 }
 
-// ChildAssetInput is used for the ProcessAndSplitBatch function.
+type ItemInShipment struct {
+	AssetID      string   `json:"assetID"`
+	Quantity     Quantity `json:"quantity"`
+	ToFacilityID string   `json:"toFacilityID"`
+	Status       string   `json:"status"`
+}
+
+type ShipmentAsset struct {
+	ObjectType     string             `json:"docType"`
+	ShipmentID     string             `json:"shipmentID"`
+	CarrierOrgName string             `json:"carrierOrgName"`
+	DriverName     string             `json:"driverName"`
+	VehiclePlate   string             `json:"vehiclePlate"`
+	FromFacilityID string             `json:"fromFacilityID"`
+	Status         string             `json:"status"`
+	Items          []ItemInShipment   `json:"items"`
+	Timeline       []ShipmentTimeline `json:"timeline"`
+	History        []Event            `json:"history"`
+}
+
 type ChildAssetInput struct {
-	AssetID     string `json:"assetID"`
-	ProductName string `json:"productName"`
+	AssetID     string   `json:"assetID"`
+	ProductName string   `json:"productName"`
+	Quantity    Quantity `json:"quantity"`
 }
 
-// FullAssetTrace: Cấu trúc dữ liệu hoàn chỉnh cho việc truy xuất.
 type FullAssetTrace struct {
-	AssetID        string   `json:"assetID"`
-	ParentAssetIDs []string `json:"parentAssetIDs"`
-	ProductName    string   `json:"productName"`
-	Status         string   `json:"status"`
-	FullHistory    []Event  `json:"fullHistory"`
+	AssetID          string   `json:"assetID"`
+	ParentAssetIDs   []string `json:"parentAssetIDs"`
+	ProductName      string   `json:"productName"`
+	Status           string   `json:"status"`
+	OriginalQuantity Quantity `json:"originalQuantity"`
+	CurrentQuantity  Quantity `json:"currentQuantity"`
+	FullHistory      []Event  `json:"fullHistory"`
 }
 
 // ===============================================================
 // CÁC HÀM CHAINCODE (TRANSACTIONS)
 // ===============================================================
 
-// CreateFarmingBatch creates a new batch at the farm.
-func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, productName string, farmDetailsJSON string) error {
-	// TODO: Add access control logic here (e.g., check if caller's MSP is a Farm MSP).
-
+func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, productName string, quantityJSON string, farmDetailsJSON string) error {
 	exists, err := s.assetExists(ctx, assetID)
 	if err != nil {
 		return err
 	}
 	if exists {
-		return fmt.Errorf("the asset %s already exists", assetID)
+		return fmt.Errorf("asset %s already exists", assetID)
+	}
+
+	var quantity Quantity
+	if err := json.Unmarshal([]byte(quantityJSON), &quantity); err != nil {
+		return fmt.Errorf("failed to unmarshal quantityJSON: %v", err)
 	}
 
 	var farmDetails FarmDetails
-	err = json.Unmarshal([]byte(farmDetailsJSON), &farmDetails)
-	if err != nil {
+	if err := json.Unmarshal([]byte(farmDetailsJSON), &farmDetails); err != nil {
 		return fmt.Errorf("failed to unmarshal farmDetailsJSON: %v", err)
 	}
 
-	clientMSP, _ := ctx.GetClientIdentity().GetMSPID()
-	txID := ctx.GetStub().GetTxID()
-	timestamp, _ := ctx.GetStub().GetTxTimestamp()
-
-	event := Event{
-		Type:      "FARMING",
-		ActorMSP:  clientMSP,
-		Timestamp: time.Unix(timestamp.Seconds, int64(timestamp.Nanos)).Format(time.RFC3339),
-		TxID:      txID,
-		Details:   farmDetails,
-	}
-
-	asset := MeatAsset{
-		ObjectType:     "MeatAsset",
-		AssetID:        assetID,
-		ParentAssetIDs: []string{},
-		ProductName:    productName,
-		Status:         "HARVESTED_AT_FARM",
-		History:        []Event{event},
-	}
-
-	assetJSON, err := json.Marshal(asset)
+	event, err := s.createEvent(ctx, "FARMING", farmDetails)
 	if err != nil {
 		return err
 	}
 
-	return ctx.GetStub().PutState(assetID, assetJSON)
+	asset := MeatAsset{
+		ObjectType:       "MeatAsset",
+		AssetID:          assetID,
+		ParentAssetIDs:   []string{},
+		ProductName:      productName,
+		Status:           "AT_FARM",
+		OriginalQuantity: quantity,
+		CurrentQuantity:  quantity,
+		History:          []Event{*event},
+	}
+
+	return s.updateAsset(ctx, &asset)
 }
 
-// ProcessAndSplitBatch processes a parent batch and creates multiple child batches.
-func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextInterface, parentAssetID string, childAssetsJSON string, processingDetailsJSON string) error {
-	// TODO: Add access control logic here (e.g., check for Processor MSP).
+func (s *SmartContract) CreateShipment(ctx contractapi.TransactionContextInterface, shipmentID string, carrierOrgName, driverName, vehiclePlate, fromFacilityID string) error {
+	exists, err := s.assetExists(ctx, shipmentID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return fmt.Errorf("shipment %s already exists", shipmentID)
+	}
 
+	event, err := s.createEvent(ctx, "SHIPMENT_CREATED", "Shipment created and pending item loading.")
+	if err != nil {
+		return err
+	}
+
+	shipment := ShipmentAsset{
+		ObjectType:     "ShipmentAsset",
+		ShipmentID:     shipmentID,
+		CarrierOrgName: carrierOrgName,
+		DriverName:     driverName,
+		VehiclePlate:   vehiclePlate,
+		FromFacilityID: fromFacilityID,
+		Status:         "PENDING",
+		Items:          []ItemInShipment{},
+		History:        []Event{*event},
+	}
+
+	return s.updateShipment(ctx, &shipment)
+}
+
+// LoadItemToShipment loads a specific quantity of an asset onto a shipment.
+// This function can be called multiple times for a shipment in PENDING state.
+func (s *SmartContract) LoadItemToShipment(ctx contractapi.TransactionContextInterface, shipmentID string, assetID string, quantityJSON string, toFacilityID string) error {
+	// TODO: Add access control logic (e.g., only the shipment's carrier can load items).
+
+	shipment, err := s.readShipmentAsset(ctx, shipmentID)
+	if err != nil {
+		return err
+	}
+	// Logic kiểm tra cốt lõi: Chỉ có thể thêm hàng khi chuyến xe đang chờ.
+	if shipment.Status != "PENDING" {
+		return fmt.Errorf("shipment %s is not in PENDING state, cannot load more items", shipmentID)
+	}
+
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return err
+	}
+
+	var quantityToLoad Quantity
+	if err := json.Unmarshal([]byte(quantityJSON), &quantityToLoad); err != nil {
+		return fmt.Errorf("failed to unmarshal quantityJSON: %v", err)
+	}
+
+	if asset.CurrentQuantity.Unit != quantityToLoad.Unit {
+		return fmt.Errorf("quantity unit mismatch for asset %s", assetID)
+	}
+	if asset.CurrentQuantity.Value < quantityToLoad.Value {
+		return fmt.Errorf("insufficient quantity for asset %s. Available: %f, Requested: %f", assetID, asset.CurrentQuantity.Value, quantityToLoad.Value)
+	}
+
+	// Trừ số lượng khỏi lô gốc
+	asset.CurrentQuantity.Value -= quantityToLoad.Value
+
+	// Chỉ ghi lại một sự kiện "đã được phân bổ", không thay đổi trạng thái chính của lô hàng
+	eventDetails := map[string]interface{}{
+		"shipmentID": shipmentID,
+		"quantity":   quantityToLoad,
+	}
+	// Trạng thái của asset vẫn giữ nguyên cho đến khi chuyến xe thực sự bắt đầu
+	err = s.addEvent(ctx, asset, "ALLOCATED_FOR_SHIPMENT", asset.Status, eventDetails)
+	if err != nil {
+		return err
+	}
+
+	// Thêm item vào chuyến xe
+	item := ItemInShipment{
+		AssetID:      assetID,
+		Quantity:     quantityToLoad,
+		ToFacilityID: toFacilityID,
+		Status:       "LOADED",
+	}
+	shipment.Items = append(shipment.Items, item)
+
+	// Lưu lại ShipmentAsset, LƯU Ý: KHÔNG THAY ĐỔI TRẠNG THÁI CỦA NÓ
+	return s.updateShipment(ctx, shipment)
+}
+
+// StartShipment: Tài xế xác nhận bắt đầu chuyến đi.
+func (s *SmartContract) StartShipment(ctx contractapi.TransactionContextInterface, shipmentID string) error {
+	// TODO: Phân quyền (chỉ tài xế của chuyến hàng)
+	shipment, err := s.readShipmentAsset(ctx, shipmentID)
+	if err != nil {
+		return err
+	}
+	if shipment.Status != "PENDING" {
+		return fmt.Errorf("shipment %s has already started or is completed", shipmentID)
+	}
+	if len(shipment.Items) == 0 {
+		return fmt.Errorf("cannot start an empty shipment %s", shipmentID)
+	}
+
+	// Cập nhật trạng thái của tất cả các MeatAsset trong chuyến hàng
+	for _, item := range shipment.Items {
+		asset, err := s.readAsset(ctx, item.AssetID)
+		if err != nil {
+			// Ghi log và bỏ qua nếu không tìm thấy asset, để không làm hỏng toàn bộ giao dịch
+			fmt.Printf("Warning: could not read asset %s while starting shipment %s: %v\n", item.AssetID, shipmentID, err)
+			continue
+		}
+
+		var newStatus string
+		if asset.CurrentQuantity.Value > 0 {
+			newStatus = "PARTIALLY_SHIPPED"
+		} else {
+			newStatus = "SHIPPED_FULL"
+		}
+
+		eventDetails := map[string]string{"shipmentID": shipmentID}
+		// Thêm sự kiện và cập nhật trạng thái cho MeatAsset
+		s.addEvent(ctx, asset, "SHIPPING_STARTED", newStatus, eventDetails)
+	}
+
+	// Cập nhật trạng thái và timeline của chuyến xe
+	shipment.Status = "IN_TRANSIT"
+	timelineEvent := ShipmentTimeline{
+		Type:      "pickup",
+		Timestamp: s.getTxTimestamp(ctx),
+	}
+	shipment.Timeline = append(shipment.Timeline, timelineEvent)
+
+	return s.updateShipment(ctx, shipment)
+}
+
+// ConfirmShipmentDelivery: Xác nhận giao hàng và tạo lô con với trạng thái được chỉ định.
+func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, newAssetID string, newStatus string) error {
+    // TODO: Phân quyền
+
+    shipment, err := s.readShipmentAsset(ctx, shipmentID)
+    if err != nil { return err }
+    if shipment.Status != "IN_TRANSIT" {
+        return fmt.Errorf("shipment %s is not in transit", shipmentID)
+    }
+
+    exists, err := s.assetExists(ctx, newAssetID)
+    if err != nil { return err }
+    if exists { return fmt.Errorf("new asset ID %s already exists", newAssetID) }
+
+    // ... (logic tìm items for this facility và parentAssetID giữ nguyên) ...
+    var itemsForThisFacility []ItemInShipment
+    var parentAssetID string
+    for i, item := range shipment.Items {
+        if item.ToFacilityID == facilityID && item.Status != "DELIVERED" {
+            itemsForThisFacility = append(itemsForThisFacility, item)
+            shipment.Items[i].Status = "DELIVERED"
+            if parentAssetID == "" { parentAssetID = item.AssetID }
+        }
+    }
+    if len(itemsForThisFacility) == 0 {
+        return fmt.Errorf("no undelivered items found for facility %s in shipment %s", facilityID, shipmentID)
+    }
+
+    parentAsset, err := s.readAsset(ctx, parentAssetID)
+    if err != nil { return err }
+
+    totalReceivedQuantity := Quantity{Unit: itemsForThisFacility[0].Quantity.Unit, Value: 0}
+    for _, item := range itemsForThisFacility {
+        totalReceivedQuantity.Value += item.Quantity.Value
+    }
+
+    // === SỬA LỖI LOGIC: Không còn đoán trạng thái, nhận trực tiếp từ tham số ===
+    // Kiểm tra xem newStatus có hợp lệ không (tùy chọn nhưng nên có)
+    validStatuses := map[string]bool{
+        "RECEIVED_AT_PROCESSOR": true,
+        "STORED_AT_WAREHOUSE":   true,
+        "AT_RETAILER":           true,
+    }
+    if !validStatuses[newStatus] {
+        return fmt.Errorf("invalid newStatus provided: %s", newStatus)
+    }
+
+    receivingEventDetails := map[string]interface{}{
+        "shipmentID":       shipmentID,
+        "receivedFacility": facilityID,
+        "quantityReceived": totalReceivedQuantity,
+    }
+    event, err := s.createEvent(ctx, "RECEIVING", receivingEventDetails)
+    if err != nil { return err }
+
+    newAsset := MeatAsset{
+        ObjectType:       "MeatAsset",
+        AssetID:          newAssetID,
+        ParentAssetIDs:   []string{parentAssetID},
+        ProductName:      parentAsset.ProductName,
+        Status:           newStatus, // Sử dụng trạng thái do client cung cấp
+        OriginalQuantity: totalReceivedQuantity,
+        CurrentQuantity:  totalReceivedQuantity,
+        History:          []Event{*event},
+    }
+    err = s.updateAsset(ctx, &newAsset)
+    if err != nil { return err }
+
+    // ... (logic cập nhật trạng thái shipment thành COMPLETED giữ nguyên) ...
+    allDelivered := true
+    for _, item := range shipment.Items {
+        if item.Status != "DELIVERED" {
+            allDelivered = false
+            break
+        }
+    }
+    if allDelivered {
+        shipment.Status = "COMPLETED"
+    }
+
+    return s.updateShipment(ctx, shipment)
+}
+
+func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextInterface, parentAssetID string, childAssetsJSON string, processingDetailsJSON string) error {
 	parentAsset, err := s.readAsset(ctx, parentAssetID)
 	if err != nil {
 		return err
 	}
 
-	// IMPROVEMENT: More robust status check.
-	// A batch can only be processed if it has been received.
-	if parentAsset.Status != "RECEIVED_AT_PROCESSOR" {
-		return fmt.Errorf("asset %s is in status '%s' and cannot be processed", parentAssetID, parentAsset.Status)
+	var processingDetails ProcessingDetails
+	if err := json.Unmarshal([]byte(processingDetailsJSON), &processingDetails); err != nil {
+		return fmt.Errorf("failed to unmarshal processingDetailsJSON: %v", err)
 	}
 
-	var processingDetails ProcessingDetails
-	err = json.Unmarshal([]byte(processingDetailsJSON), &processingDetails)
+	err = s.addEvent(ctx, parentAsset, "PROCESSING", "PROCESSED_AND_SPLIT", processingDetails)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal processingDetailsJSON: %v", err)
+		return err
+	}
+
+	var childAssets []ChildAssetInput
+	if err := json.Unmarshal([]byte(childAssetsJSON), &childAssets); err != nil {
+		return fmt.Errorf("failed to unmarshal childAssetsJSON: %v", err)
 	}
 
 	clientMSP, _ := ctx.GetClientIdentity().GetMSPID()
@@ -199,40 +411,12 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 	timestamp, _ := ctx.GetStub().GetTxTimestamp()
 	formattedTime := time.Unix(timestamp.Seconds, int64(timestamp.Nanos)).Format(time.RFC3339)
 
-	processingEvent := Event{
-		Type:      "PROCESSING",
-		ActorMSP:  clientMSP,
-		Timestamp: formattedTime,
-		TxID:      txID,
-		Details:   processingDetails,
-	}
-
-	parentAsset.History = append(parentAsset.History, processingEvent)
-	parentAsset.Status = "PROCESSED_AND_SPLIT"
-
-	parentAssetJSON, err := json.Marshal(parentAsset)
-	if err != nil {
-		return err
-	}
-	err = ctx.GetStub().PutState(parentAssetID, parentAssetJSON)
-	if err != nil {
-		return err
-	}
-
-	var childAssets []ChildAssetInput
-	err = json.Unmarshal([]byte(childAssetsJSON), &childAssets)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal childAssetsJSON: %v", err)
-	}
-
 	for _, child := range childAssets {
 		exists, err := s.assetExists(ctx, child.AssetID)
 		if err != nil {
 			return err
 		}
 		if exists {
-			// IMPROVEMENT: Instead of failing the whole transaction, we could just log a warning and skip.
-			// For now, failing is safer.
 			return fmt.Errorf("child asset %s already exists", child.AssetID)
 		}
 
@@ -245,19 +429,16 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 		}
 
 		newChildAsset := MeatAsset{
-			ObjectType:     "MeatAsset",
-			AssetID:        child.AssetID,
-			ParentAssetIDs: []string{parentAssetID},
-			ProductName:    child.ProductName,
-			Status:         "PACKAGED_AT_PROCESSOR",
-			History:        []Event{creationEvent},
+			ObjectType:       "MeatAsset",
+			AssetID:          child.AssetID,
+			ParentAssetIDs:   []string{parentAssetID},
+			ProductName:      child.ProductName,
+			Status:           "PACKAGED",
+			OriginalQuantity: child.Quantity,
+			CurrentQuantity:  child.Quantity,
+			History:          []Event{creationEvent},
 		}
-
-		childAssetJSON, err := json.Marshal(newChildAsset)
-		if err != nil {
-			return err
-		}
-		err = ctx.GetStub().PutState(child.AssetID, childAssetJSON)
+		err = s.updateAsset(ctx, &newChildAsset)
 		if err != nil {
 			return err
 		}
@@ -266,47 +447,214 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 	return nil
 }
 
-// AddEvent adds a generic event to an asset's history.
-func (s *SmartContract) AddEvent(ctx contractapi.TransactionContextInterface, assetID string, eventType string, newStatus string, detailsJSON string) error {
-	// TODO: Add access control logic here (e.g., check MSP based on eventType).
+// UpdateFarmingDetails allows a farm to add or update details of a batch before it's shipped.
+func (s *SmartContract) UpdateFarmingDetails(ctx contractapi.TransactionContextInterface, assetID string, updatedFarmDetailsJSON string) error {
+    // TODO: Add access control logic (only the farm that owns the asset can update).
 
+    asset, err := s.readAsset(ctx, assetID)
+    if err != nil {
+        return err
+    }
+
+    // A farm can only update details while the asset is still at the farm.
+    if asset.Status != "AT_FARM" {
+        return fmt.Errorf("asset %s with status '%s' cannot be updated by the farm", assetID, asset.Status)
+    }
+
+    var updatedFarmDetails FarmDetails
+    if err := json.Unmarshal([]byte(updatedFarmDetailsJSON), &updatedFarmDetails); err != nil {
+        return fmt.Errorf("failed to unmarshal updatedFarmDetailsJSON: %v", err)
+    }
+
+    // Find the original FARMING event and update its details.
+    // This is better than creating a new event to avoid cluttering the history.
+    updated := false
+    for i, event := range asset.History {
+        if event.Type == "FARMING" {
+            asset.History[i].Details = updatedFarmDetails
+            updated = true
+            break
+        }
+    }
+
+    if !updated {
+        return fmt.Errorf("could not find the original FARMING event to update for asset %s", assetID)
+    }
+
+    return s.updateAsset(ctx, asset)
+}
+
+// SỬA LỖI CÚ PHÁP: Thêm lại các hàm đã mất
+func (s *SmartContract) UpdateStorageInfo(ctx contractapi.TransactionContextInterface, assetID string, storageDetailsJSON string) error {
 	asset, err := s.readAsset(ctx, assetID)
 	if err != nil {
 		return err
 	}
 
-	var details interface{}
-	// IMPROVEMENT: Unmarshal into specific structs for data validation.
-	switch eventType {
-	case "SHIPPING":
-		var d ShipmentDetails
-		err = json.Unmarshal([]byte(detailsJSON), &d)
-		details = d
-	case "RECEIVING":
-		var d StorageDetails // Re-using StorageDetails for receiving event
-		err = json.Unmarshal([]byte(detailsJSON), &d)
-		details = d
-	case "STORAGE_UPDATE":
-		var d StorageDetails
-		err = json.Unmarshal([]byte(detailsJSON), &d)
-		details = d
-	case "SOLD":
-		var d SoldDetails
-		err = json.Unmarshal([]byte(detailsJSON), &d)
-		details = d
-	default:
-		// For flexibility, allow generic JSON object for unknown types
-		var genericDetails map[string]interface{}
-		err = json.Unmarshal([]byte(detailsJSON), &genericDetails)
-		details = genericDetails
-	}
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal detailsJSON for event type %s: %v", eventType, err)
+	var storageDetails StorageDetails
+	if err := json.Unmarshal([]byte(storageDetailsJSON), &storageDetails); err != nil {
+		return fmt.Errorf("failed to unmarshal storageDetailsJSON: %v", err)
 	}
 
-	clientMSP, _ := ctx.GetClientIdentity().GetMSPID()
+	return s.addEvent(ctx, asset, "STORAGE_UPDATE", asset.Status, storageDetails)
+}
+
+// SplitBatchToUnits creates a specified number of individual retail units from a product batch.
+func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInterface, parentAssetID string, unitCount int, unitIDPrefix string) error {
+    // TODO: Phân quyền (chỉ Retailer)
+
+    parentAsset, err := s.readAsset(ctx, parentAssetID)
+    if err != nil {
+        return err
+    }
+
+    if parentAsset.Status != "AT_RETAILER" {
+        return fmt.Errorf("asset %s with status '%s' cannot be split into units", parentAssetID, parentAsset.Status)
+    }
+
+    // Kiểm tra số lượng
+    if float64(unitCount) > parentAsset.CurrentQuantity.Value {
+        return fmt.Errorf("unit count (%d) exceeds parent batch quantity (%f)", unitCount, parentAsset.CurrentQuantity.Value)
+    }
+
+    clientMSP, _ := ctx.GetClientIdentity().GetMSPID()
+    txID := ctx.GetStub().GetTxID()
+    timestamp, _ := ctx.GetStub().GetTxTimestamp()
+    formattedTime := time.Unix(timestamp.Seconds, int64(timestamp.Nanos)).Format(time.RFC3339)
+
+    // Lặp và tạo ra các unit con
+    for i := 1; i <= unitCount; i++ {
+        // Tự động tạo ID cho unit mới
+        unitAssetID := fmt.Sprintf("%s%d", unitIDPrefix, i)
+
+        exists, err := s.assetExists(ctx, unitAssetID)
+        if err != nil {
+            return err
+        }
+        if exists {
+            // Nếu ID đã tồn tại, có thể bỏ qua hoặc báo lỗi. Báo lỗi an toàn hơn.
+            return fmt.Errorf("unit asset %s already exists", unitAssetID)
+        }
+
+        creationEvent := Event{
+            Type:      "CREATED_AS_UNIT",
+            ActorMSP:  clientMSP,
+            Timestamp: formattedTime,
+            TxID:      txID,
+            Details:   fmt.Sprintf("Split from product batch %s", parentAssetID),
+        }
+        
+        unitHistory := append(parentAsset.History, creationEvent)
+
+        // Mỗi unit có số lượng là 1
+        unitQuantity := Quantity{
+            Unit:  parentAsset.OriginalQuantity.Unit, // Kế thừa đơn vị của cha
+            Value: 1,
+        }
+
+        newUnitAsset := MeatAsset{
+            ObjectType:       "MeatAsset",
+            AssetID:          unitAssetID,
+            ParentAssetIDs:   []string{parentAssetID},
+            ProductName:      parentAsset.ProductName, // Kế thừa tên sản phẩm
+            Status:           "ON_SHELF",
+            OriginalQuantity: unitQuantity,
+            CurrentQuantity:  unitQuantity,
+            History:          unitHistory,
+        }
+        err = s.updateAsset(ctx, &newUnitAsset)
+        if err != nil {
+            return err
+        }
+    }
+
+    // Cập nhật lô cha
+    parentAsset.CurrentQuantity.Value -= float64(unitCount)
+    if parentAsset.CurrentQuantity.Value == 0 {
+        parentAsset.Status = "SPLIT_INTO_UNITS_FULL"
+    } else {
+        parentAsset.Status = "SPLIT_INTO_UNITS_PARTIAL"
+    }
+    
+    err = s.updateAsset(ctx, parentAsset)
+    if err != nil {
+        return err
+    }
+
+    return nil
+}
+
+
+func (s *SmartContract) MarkAsSold(ctx contractapi.TransactionContextInterface, assetID string, soldDetailsJSON string) error {
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return err
+	}
+
+	if asset.Status != "ON_SHELF" {
+		return fmt.Errorf("asset %s with status '%s' cannot be sold", assetID, asset.Status)
+	}
+
+	var soldDetails SoldDetails
+	if err := json.Unmarshal([]byte(soldDetailsJSON), &soldDetails); err != nil {
+		return fmt.Errorf("failed to unmarshal soldDetailsJSON: %v", err)
+	}
+
+	return s.addEvent(ctx, asset, "SOLD", "SOLD", soldDetails)
+}
+
+// ===============================================================
+// CÁC HÀM QUERY (READ-ONLY)
+// ===============================================================
+
+func (s *SmartContract) GetAssetWithFullHistory(ctx contractapi.TransactionContextInterface, assetID string) (*FullAssetTrace, error) {
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return nil, err
+	}
+
+	fullHistory, err := s.getAssetHistoryRecursive(ctx, assetID)
+	if err != nil {
+		return nil, err
+	}
+
+	traceResult := FullAssetTrace{
+		AssetID:          asset.AssetID,
+		ParentAssetIDs:   asset.ParentAssetIDs,
+		ProductName:      asset.ProductName,
+		Status:           asset.Status,
+		OriginalQuantity: asset.OriginalQuantity,
+		CurrentQuantity:  asset.CurrentQuantity,
+		FullHistory:      fullHistory,
+	}
+
+	return &traceResult, nil
+}
+
+// ===============================================================
+// CÁC HÀM TIỆN ÍCH (PRIVATE)
+// ===============================================================
+
+func (s *SmartContract) addEvent(ctx contractapi.TransactionContextInterface, asset *MeatAsset, eventType string, newStatus string, details interface{}) error {
+	event, err := s.createEvent(ctx, eventType, details)
+	if err != nil {
+		return err
+	}
+	asset.History = append(asset.History, *event)
+	asset.Status = newStatus
+	return s.updateAsset(ctx, asset)
+}
+
+func (s *SmartContract) createEvent(ctx contractapi.TransactionContextInterface, eventType string, details interface{}) (*Event, error) {
+	clientMSP, err := ctx.GetClientIdentity().GetMSPID()
+	if err != nil {
+		return nil, err
+	}
 	txID := ctx.GetStub().GetTxID()
-	timestamp, _ := ctx.GetStub().GetTxTimestamp()
+	timestamp, err := ctx.GetStub().GetTxTimestamp()
+	if err != nil {
+		return nil, err
+	}
 
 	event := Event{
 		Type:      eventType,
@@ -315,56 +663,72 @@ func (s *SmartContract) AddEvent(ctx contractapi.TransactionContextInterface, as
 		TxID:      txID,
 		Details:   details,
 	}
+	return &event, nil
+}
 
-	asset.History = append(asset.History, event)
-	asset.Status = newStatus
-
+func (s *SmartContract) updateAsset(ctx contractapi.TransactionContextInterface, asset *MeatAsset) error {
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
 		return err
 	}
-
-	return ctx.GetStub().PutState(assetID, assetJSON)
+	return ctx.GetStub().PutState(asset.AssetID, assetJSON)
 }
 
-// ===============================================================
-// CÁC HÀM QUERY (READ-ONLY)
-// ===============================================================
+func (s *SmartContract) readAsset(ctx contractapi.TransactionContextInterface, assetID string) (*MeatAsset, error) {
+	assetJSON, err := ctx.GetStub().GetState(assetID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from world state: %v", err)
+	}
+	if assetJSON == nil {
+		return nil, fmt.Errorf("the asset %s does not exist", assetID)
+	}
 
-// GetAssetWithFullHistory: Lấy thông tin chi tiết của một tài sản
-// và toàn bộ lịch sử của nó, bao gồm cả lịch sử của các lô cha.
-func (s *SmartContract) GetAssetWithFullHistory(ctx contractapi.TransactionContextInterface, assetID string) (*FullAssetTrace, error) {
-    // 1. Lấy thông tin của chính tài sản được yêu cầu
-    asset, err := s.readAsset(ctx, assetID)
-    if err != nil {
-        return nil, err
-    }
-
-    // 2. Lấy toàn bộ lịch sử đệ quy
-    fullHistory, err := s.getAssetHistoryRecursive(ctx, assetID) // Gọi hàm private
-    if err != nil {
-        return nil, err
-    }
-
-    // 3. Tạo đối tượng trả về hoàn chỉnh
-    traceResult := FullAssetTrace{
-        AssetID:        asset.AssetID,
-        ParentAssetIDs: asset.ParentAssetIDs,
-        ProductName:    asset.ProductName,
-        Status:         asset.Status,
-        FullHistory:    fullHistory,
-    }
-
-    return &traceResult, nil
+	var asset MeatAsset
+	err = json.Unmarshal(assetJSON, &asset)
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
 }
 
-// ===============================================================
-// CÁC HÀM TIỆN ÍCH (PRIVATE)
-// ===============================================================
+func (s *SmartContract) updateShipment(ctx contractapi.TransactionContextInterface, shipment *ShipmentAsset) error {
+	shipmentJSON, err := json.Marshal(shipment)
+	if err != nil {
+		return err
+	}
+	return ctx.GetStub().PutState(shipment.ShipmentID, shipmentJSON)
+}
 
+func (s *SmartContract) readShipmentAsset(ctx contractapi.TransactionContextInterface, shipmentID string) (*ShipmentAsset, error) {
+	shipmentJSON, err := ctx.GetStub().GetState(shipmentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read from world state: %v", err)
+	}
+	if shipmentJSON == nil {
+		return nil, fmt.Errorf("the shipment %s does not exist", shipmentID)
+	}
 
-// GetAssetHistoryRecursive retrieves the full history of an asset, including its parents.
-// This function is read-only and does not submit a transaction.
+	var shipment ShipmentAsset
+	err = json.Unmarshal(shipmentJSON, &shipment)
+	if err != nil {
+		return nil, err
+	}
+	return &shipment, nil
+}
+
+func (s *SmartContract) assetExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
+	assetJSON, err := ctx.GetStub().GetState(id)
+	if err != nil {
+		return false, fmt.Errorf("failed to read from world state: %v", err)
+	}
+	return assetJSON != nil, nil
+}
+
+func (s *SmartContract) getTxTimestamp(ctx contractapi.TransactionContextInterface) string {
+	ts, _ := ctx.GetStub().GetTxTimestamp()
+	return time.Unix(ts.Seconds, int64(ts.Nanos)).Format(time.RFC3339)
+}
+
 func (s *SmartContract) getAssetHistoryRecursive(ctx contractapi.TransactionContextInterface, assetID string) ([]Event, error) {
 	var fullHistory []Event
 	queue := []string{assetID}
@@ -398,35 +762,6 @@ func (s *SmartContract) getAssetHistoryRecursive(ctx contractapi.TransactionCont
 	})
 
 	return fullHistory, nil
-}
-
-
-// readAsset is a private helper function to read an asset from the ledger.
-func (s *SmartContract) readAsset(ctx contractapi.TransactionContextInterface, assetID string) (*MeatAsset, error) {
-	assetJSON, err := ctx.GetStub().GetState(assetID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read from world state: %v", err)
-	}
-	if assetJSON == nil {
-		return nil, fmt.Errorf("the asset %s does not exist", assetID)
-	}
-
-	var asset MeatAsset
-	err = json.Unmarshal(assetJSON, &asset)
-	if err != nil {
-		return nil, err
-	}
-
-	return &asset, nil
-}
-
-// assetExists is a private helper function to check if an asset exists.
-func (s *SmartContract) assetExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
-	assetJSON, err := ctx.GetStub().GetState(id)
-	if err != nil {
-		return false, fmt.Errorf("failed to read from world state: %v", err)
-	}
-	return assetJSON != nil, nil
 }
 
 // ===============================================================
