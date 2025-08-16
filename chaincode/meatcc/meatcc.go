@@ -536,6 +536,7 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
             return fmt.Errorf("unit asset %s already exists", unitAssetID)
         }
 
+        // === SỬA LỖI LOGIC: Lịch sử của unit con chỉ bắt đầu bằng sự kiện tạo ra nó ===
         creationEvent := Event{
             Type:      "CREATED_AS_UNIT",
             ActorMSP:  clientMSP,
@@ -544,11 +545,8 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
             Details:   fmt.Sprintf("Split from product batch %s", parentAssetID),
         }
         
-        unitHistory := append(parentAsset.History, creationEvent)
-
-        // Mỗi unit có số lượng là 1
         unitQuantity := Quantity{
-            Unit:  parentAsset.OriginalQuantity.Unit, // Kế thừa đơn vị của cha
+            Unit:  parentAsset.OriginalQuantity.Unit,
             Value: 1,
         }
 
@@ -556,27 +554,24 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
             ObjectType:       "MeatAsset",
             AssetID:          unitAssetID,
             ParentAssetIDs:   []string{parentAssetID},
-            ProductName:      parentAsset.ProductName, // Kế thừa tên sản phẩm
+            ProductName:      parentAsset.ProductName,
             Status:           "ON_SHELF",
             OriginalQuantity: unitQuantity,
             CurrentQuantity:  unitQuantity,
-            History:          unitHistory,
+            History:          []Event{creationEvent}, // Chỉ chứa sự kiện của chính nó
         }
         err = s.updateAsset(ctx, &newUnitAsset)
-        if err != nil {
-            return err
-        }
+        if err != nil { return err }
     }
 
     // Cập nhật lô cha
     parentAsset.CurrentQuantity.Value -= float64(unitCount)
-    if parentAsset.CurrentQuantity.Value == 0 {
-        parentAsset.Status = "SPLIT_INTO_UNITS_FULL"
-    } else {
-        parentAsset.Status = "SPLIT_INTO_UNITS_PARTIAL"
+    // Thêm một sự kiện "SPLIT" vào lịch sử của lô cha để ghi nhận hành động này
+    splitEventDetails := map[string]interface{}{
+        "unitCount": unitCount,
+        "unitIDPrefix": unitIDPrefix,
     }
-    
-    err = s.updateAsset(ctx, parentAsset)
+    err = s.addEvent(ctx, parentAsset, "SPLIT_INTO_UNITS", "SPLIT_INTO_UNITS_COMPLETED", splitEventDetails)
     if err != nil {
         return err
     }
