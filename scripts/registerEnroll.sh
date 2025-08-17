@@ -68,6 +68,12 @@ fabric-ca-client register --caname $CA1_NAME --id.name org1admin --id.secret adm
 fabric-ca-client enroll -u https://org1admin:adminpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/Admin@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
 cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/Admin@meatsupply.example.com/msp/config.yaml"
 
+# === BỔ SUNG: TẠO DANH TÍNH RIÊNG CHO API SERVER ===
+echo "--- Đang tạo danh tính cho API Server ---"
+fabric-ca-client register --caname $CA1_NAME --id.name apiserver --id.secret apiserverpw --id.type client --id.attrs 'role=superadmin:ecert,entityId=global:ecert' --tls.certfiles $CA1_TLS_CERT_PATH
+fabric-ca-client enroll -u https://apiserver:apiserverpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
+cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp/config.yaml"
+
 # =================================================================
 # TẠO CHỨNG CHỈ CHO REGULATORORG
 # =================================================================
@@ -176,7 +182,7 @@ cp "${PWD}/network/crypto-config/peerOrganizations/regulator.example.com/peers/p
 cp "${PWD}/network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt" "${PWD}/network/crypto-config/peerOrganizations/regulator.example.com/msp/tlscacerts/ca.meatsupply.example.com-cert.pem"
 
 # --- Dừng các CA container ---
-echo "--- Dừng Fabric CAs ---"
-docker-compose -f network/docker/docker-compose-ca.yaml down
+# echo "--- Dừng Fabric CAs ---"
+# docker-compose -f network/docker/docker-compose-ca.yaml down
 
 echo "--- Đã tạo xong toàn bộ chứng chỉ ---"
