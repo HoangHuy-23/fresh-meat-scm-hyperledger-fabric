@@ -15,7 +15,7 @@ export_org_vars() {
   if [ "$ORG_NUM" -eq 1 ]; then
     export CORE_PEER_LOCALMSPID="MeatSupplyOrgMSP"
     export CORE_PEER_TLS_ROOTCERT_FILE=${CRYPTO_PATH}/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt
-    export CORE_PEER_MSPCONFIGPATH=${CRYPTO_PATH}/peerOrganizations/meatsupply.example.com/users/Admin@meatsupply.example.com/msp
+    export CORE_PEER_MSPCONFIGPATH=${CRYPTO_PATH}/peerOrganizations/meatsupply.example.com/users/SuperAdmin@meatsupply.example.com/msp
     export CORE_PEER_ADDRESS=localhost:${PEER0_ORG1_PORT}
     export TARGET_PEER_HOST="peer0.meatsupply.example.com"
     export TARGET_PEER_URL="localhost:${PEER0_ORG1_PORT}"

@@ -60,19 +60,19 @@ cp "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/tlscacerts/"
 cp "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/signcerts/"* "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/server.crt"
 cp "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/keystore/"* "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/server.key"
 
-fabric-ca-client register --caname $CA1_NAME --id.name user1 --id.secret user1pw --id.type client --tls.certfiles $CA1_TLS_CERT_PATH
-fabric-ca-client enroll -u https://user1:user1pw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/User1@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
-cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/User1@meatsupply.example.com/msp/config.yaml"
+# fabric-ca-client register --caname $CA1_NAME --id.name user1 --id.secret user1pw --id.type client --tls.certfiles $CA1_TLS_CERT_PATH
+# fabric-ca-client enroll -u https://user1:user1pw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/User1@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
+# cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/User1@meatsupply.example.com/msp/config.yaml"
 
-fabric-ca-client register --caname $CA1_NAME --id.name org1admin --id.secret adminpw --id.type admin --tls.certfiles $CA1_TLS_CERT_PATH
-fabric-ca-client enroll -u https://org1admin:adminpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/Admin@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
-cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/Admin@meatsupply.example.com/msp/config.yaml"
+fabric-ca-client register --caname $CA1_NAME --id.name superadmin --id.secret superadminpw --id.type admin --id.attrs '"hf.Registrar.Roles=*","hf.Registrar.DelegateRoles=*","hf.Registrar.Attributes=*","hf.Revoker=true","hf.GenCRL=true","hf.AffiliationMgr=true"' --tls.certfiles $CA1_TLS_CERT_PATH
+fabric-ca-client enroll -u https://superadmin:superadminpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/SuperAdmin@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH   --enrollment.attrs "hf.Registrar.Roles,hf.Registrar.DelegateRoles,hf.Registrar.Attributes,hf.Revoker,hf.GenCRL,hf.AffiliationMgr"
+cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/SuperAdmin@meatsupply.example.com/msp/config.yaml"
 
-# === BỔ SUNG: TẠO DANH TÍNH RIÊNG CHO API SERVER ===
-echo "--- Đang tạo danh tính cho API Server ---"
-fabric-ca-client register --caname $CA1_NAME --id.name apiserver --id.secret apiserverpw --id.type client --id.attrs 'role=superadmin:ecert,entityId=global:ecert' --tls.certfiles $CA1_TLS_CERT_PATH
-fabric-ca-client enroll -u https://apiserver:apiserverpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
-cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp/config.yaml"
+# # === BỔ SUNG: TẠO DANH TÍNH RIÊNG CHO API SERVER ===
+# echo "--- Đang tạo danh tính cho API Server ---"
+# fabric-ca-client register --caname $CA1_NAME --id.name apiserver --id.secret apiserverpw --id.type client --id.attrs 'role=superadmin:ecert,entityId=global:ecert' --tls.certfiles $CA1_TLS_CERT_PATH
+# fabric-ca-client enroll -u https://apiserver:apiserverpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
+# cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp/config.yaml"
 
 # =================================================================
 # TẠO CHỨNG CHỈ CHO REGULATORORG
