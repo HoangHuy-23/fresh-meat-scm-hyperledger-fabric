@@ -60,14 +60,44 @@ cp "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/tlscacerts/"
 cp "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/signcerts/"* "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/server.crt"
 cp "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/keystore/"* "${FABRIC_CA_CLIENT_HOME}/peers/peer0.meatsupply.example.com/tls/server.key"
 
-fabric-ca-client register --caname $CA1_NAME --id.name user1 --id.secret user1pw --id.type client --tls.certfiles $CA1_TLS_CERT_PATH
-fabric-ca-client enroll -u https://user1:user1pw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/User1@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
-cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/User1@meatsupply.example.com/msp/config.yaml"
+# Thay thế phần tạo superadmin và apiserver trong script với code này:
 
-fabric-ca-client register --caname $CA1_NAME --id.name org1admin --id.secret adminpw --id.type admin --tls.certfiles $CA1_TLS_CERT_PATH
-fabric-ca-client enroll -u https://org1admin:adminpw@localhost:7054 --caname $CA1_NAME -M "${FABRIC_CA_CLIENT_HOME}/users/Admin@meatsupply.example.com/msp" --tls.certfiles $CA1_TLS_CERT_PATH
-cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/Admin@meatsupply.example.com/msp/config.yaml"
+# === TẠO SUPERADMIN VỚI QUYỀN REGISTRAR ===
+echo "--- Đang tạo SuperAdmin với đầy đủ quyền ---"
+fabric-ca-client register --caname $CA1_NAME \
+  --id.name superadmin \
+  --id.secret superadminpw \
+  --id.type admin \
+  --id.attrs 'hf.Registrar.Roles=*,hf.Registrar.DelegateRoles=*,hf.Registrar.Attributes=*,hf.Revoker=true,hf.GenCRL=true,hf.AffiliationMgr=true' \
+  --tls.certfiles $CA1_TLS_CERT_PATH
 
+fabric-ca-client enroll -u https://superadmin:superadminpw@localhost:7054 \
+  --caname $CA1_NAME \
+  -M "${FABRIC_CA_CLIENT_HOME}/users/SuperAdmin@meatsupply.example.com/msp" \
+  --enrollment.attrs "hf.Registrar.Roles,hf.Registrar.DelegateRoles,hf.Registrar.Attributes,hf.Revoker,hf.GenCRL,hf.AffiliationMgr" \
+  --tls.certfiles $CA1_TLS_CERT_PATH
+
+cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/SuperAdmin@meatsupply.example.com/msp/config.yaml"
+
+# === TẠO APISERVER VỚI QUYỀN REGISTRAR ===
+echo "--- Đang tạo ApiServer với quyền registrar ---"
+
+fabric-ca-client register --caname $CA1_NAME \
+  --id.name apiserver \
+  --id.secret apiserverpw \
+  --id.type client \
+  --id.attrs 'hf.Registrar.Roles=client,hf.Registrar.DelegateRoles=client,hf.Registrar.Attributes=*,hf.Revoker=true,role=superadmin' \
+  --tls.certfiles $CA1_TLS_CERT_PATH
+
+fabric-ca-client enroll -u https://apiserver:apiserverpw@localhost:7054 \
+  --caname $CA1_NAME \
+  -M "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp" \
+  --enrollment.attrs "hf.Registrar.Roles,hf.Registrar.DelegateRoles,hf.Registrar.Attributes,hf.Revoker,role" \
+  --tls.certfiles $CA1_TLS_CERT_PATH
+
+cp "${FABRIC_CA_CLIENT_HOME}/msp/config.yaml" "${FABRIC_CA_CLIENT_HOME}/users/ApiServer@meatsupply.example.com/msp/config.yaml"
+
+echo "✅ ApiServer identity đã được tạo với quyền registrar"
 # =================================================================
 # TẠO CHỨNG CHỈ CHO REGULATORORG
 # =================================================================
@@ -176,7 +206,7 @@ cp "${PWD}/network/crypto-config/peerOrganizations/regulator.example.com/peers/p
 cp "${PWD}/network/crypto-config/peerOrganizations/meatsupply.example.com/peers/peer0.meatsupply.example.com/tls/ca.crt" "${PWD}/network/crypto-config/peerOrganizations/regulator.example.com/msp/tlscacerts/ca.meatsupply.example.com-cert.pem"
 
 # --- Dừng các CA container ---
-echo "--- Dừng Fabric CAs ---"
-docker-compose -f network/docker/docker-compose-ca.yaml down
+# echo "--- Dừng Fabric CAs ---"
+# docker-compose -f network/docker/docker-compose-ca.yaml down
 
 echo "--- Đã tạo xong toàn bộ chứng chỉ ---"
