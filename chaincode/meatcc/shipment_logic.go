@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
 // Tạo một lô vận chuyển mới, lưu thông tin tài xế, phương tiện, các điểm dừng và ghi lại sự kiện khởi tạo shipment.
-func (s *SmartContract) CreateShipment(ctx contractapi.TransactionContextInterface, shipmentID string, shipmentType, driverEnrollmentID, driverName, vehiclePlate, fromFacilityID string, stopsJSON string) error {
+func (s *SmartContract) CreateShipment(ctx contractapi.TransactionContextInterface, shipmentID string, shipmentType, driverEnrollmentID, driverName, vehiclePlate string, stopsJSON string) error {
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
@@ -23,6 +24,10 @@ func (s *SmartContract) CreateShipment(ctx contractapi.TransactionContextInterfa
 	var stops []StopInJourney
 	if err := json.Unmarshal([]byte(stopsJSON), &stops); err != nil {
 		return fmt.Errorf("failed to unmarshal stopsJSON: %v", err)
+	}
+
+	for i := range stops {
+		stops[i].Status = "PENDING"
 	}
 
 	event, err := s.createEvent(ctx, "SHIPMENT_CREATED", "Shipment created and pending.")
@@ -166,10 +171,14 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 				}
 
 				var newStatus string
-				if receiverOrg == "retailer" { // Example logic
+				if strings.Contains(receiverOrg, "retailer-") {
 					newStatus = "AT_RETAILER"
+				} else if strings.Contains(receiverOrg, "processor-") {
+					newStatus = "AT_PROCESSOR"
+				} else if strings.Contains(receiverOrg, "warehouse-") {
+					newStatus = "AT_WAREHOUSE"
 				} else {
-					newStatus = "RECEIVED"
+					newStatus = "RECEIVED" 
 				}
 
 				newAssetID := fmt.Sprintf("%s-%d", newAssetIDPrefix, j)

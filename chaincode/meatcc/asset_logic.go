@@ -62,6 +62,11 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 	if err != nil {
 		return err
 	}
+
+	if parentAsset.Status != "AT_PROCESSOR" {
+		return fmt.Errorf("asset %s with status '%s' cannot be split into units", parentAssetID, parentAsset.Status)
+	}
+
 	if err := requireOwnership(ctx, parentAsset); err != nil {
 		return err
 	}
