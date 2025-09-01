@@ -15,7 +15,7 @@ type MediaPointer struct {
 
 // FarmDetails lưu thông tin giai đoạn nuôi/trồng tại trang trại.
 type FarmDetails struct {
-	FarmOrgName  string         `json:"farmOrgName"`
+	FacilityID   string         `json:"facilityID"`
 	FacilityName string         `json:"facilityName"`
 	SowingDate   string         `json:"sowingDate"`
 	HarvestDate  string         `json:"harvestDate"`
@@ -93,10 +93,12 @@ type ItemInShipment struct {
 
 // StopInJourney mô tả một điểm dừng trong hành trình vận chuyển.
 type StopInJourney struct {
-	FacilityID string           `json:"facilityID"`
-	Action     string           `json:"action"`
-	Status     string           `json:"status"`
-	Items      []ItemInShipment `json:"items"`
+	FacilityID      string           `json:"facilityID"`
+	FacilityName    string           `json:"facilityName"`    // <-- THÊM MỚI
+	FacilityAddress string           `json:"facilityAddress"` // <-- THÊM MỚI
+	Action          string           `json:"action"`
+	Status          string           `json:"status"`
+	Items           []ItemInShipment `json:"items"`
 }
 
 // ShipmentAsset mô tả một lô vận chuyển.

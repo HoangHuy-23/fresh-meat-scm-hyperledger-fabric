@@ -13,7 +13,7 @@ func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInt
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
-	callerOrg, _, _ := ctx.GetClientIdentity().GetAttributeValue("orgShortName")
+	callerOrg, _, _ := ctx.GetClientIdentity().GetAttributeValue("facilityID")
 
 	exists, err := s.assetExists(ctx, assetID)
 	if err != nil {
@@ -144,15 +144,30 @@ func (s *SmartContract) UpdateFarmingDetails(ctx contractapi.TransactionContextI
 		return fmt.Errorf("asset %s with status '%s' cannot be updated by the farm", assetID, asset.Status)
 	}
 
-	var updatedFarmDetails FarmDetails
-	if err := json.Unmarshal([]byte(updatedFarmDetailsJSON), &updatedFarmDetails); err != nil {
+	// === LOGIC MERGE MỚI ===
+
+	// 1. Unmarshal các chi tiết MỚI từ request vào một map
+	var newDetails map[string]interface{}
+	if err := json.Unmarshal([]byte(updatedFarmDetailsJSON), &newDetails); err != nil {
 		return fmt.Errorf("failed to unmarshal updatedFarmDetailsJSON: %v", err)
 	}
 
 	updated := false
 	for i, event := range asset.History {
 		if event.Type == "FARMING" {
-			asset.History[i].Details = updatedFarmDetails
+			// 2. Chuyển đổi chi tiết CŨ (là interface{}) thành một map
+			existingDetails, ok := event.Details.(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("could not parse existing farming details for asset %s", assetID)
+			}
+
+			// 3. Lặp qua các chi tiết MỚI và cập nhật/thêm vào chi tiết CŨ
+			for key, value := range newDetails {
+				existingDetails[key] = value
+			}
+
+			// 4. Gán lại map đã được hợp nhất vào lịch sử
+			asset.History[i].Details = existingDetails
 			updated = true
 			break
 		}
@@ -160,6 +175,7 @@ func (s *SmartContract) UpdateFarmingDetails(ctx contractapi.TransactionContextI
 	if !updated {
 		return fmt.Errorf("could not find the original FARMING event to update for asset %s", assetID)
 	}
+	// ========================
 
 	return s.updateAsset(ctx, asset)
 }
