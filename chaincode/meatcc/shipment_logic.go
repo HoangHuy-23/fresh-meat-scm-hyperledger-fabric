@@ -3,14 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
 // Tạo một lô vận chuyển mới, lưu thông tin tài xế, phương tiện, các điểm dừng và ghi lại sự kiện khởi tạo shipment.
 func (s *SmartContract) CreateShipment(ctx contractapi.TransactionContextInterface, shipmentID string, shipmentType, driverEnrollmentID, driverName, vehiclePlate string, stopsJSON string) error {
-	if err := requireRole(ctx, "admin", "worker"); err != nil {
+	if err := requireRole(ctx, "admin", "driver"); err != nil {
 		return err
 	}
 	exists, err := s.assetExists(ctx, shipmentID)
@@ -104,6 +103,9 @@ func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterfac
 
 // Bắt đầu quá trình vận chuyển, cập nhật trạng thái shipment thành IN_TRANSIT và ghi lại sự kiện khởi hành.
 func (s *SmartContract) StartShipment(ctx contractapi.TransactionContextInterface, shipmentID string) error {
+	if err := requireRole(ctx, "admin", "driver"); err != nil {
+		return err
+	}
 	shipment, err := s.readShipmentAsset(ctx, shipmentID)
 	if err != nil {
 		return err
@@ -148,7 +150,9 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
-	receiverOrg, _, _ := ctx.GetClientIdentity().GetAttributeValue("orgShortName")
+
+	receiverFacilityID, _, _ := ctx.GetClientIdentity().GetAttributeValue("facilityID")   
+	receiverFacilityType, _, _ := ctx.GetClientIdentity().GetAttributeValue("facilityType") 
 
 	shipment, err := s.readShipmentAsset(ctx, shipmentID)
 	if err != nil {
@@ -171,14 +175,15 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 				}
 
 				var newStatus string
-				if strings.Contains(receiverOrg, "retailer-") {
+				switch receiverFacilityType {
+				case "RETAILER":
 					newStatus = "AT_RETAILER"
-				} else if strings.Contains(receiverOrg, "processor-") {
+				case "PROCESSOR":
 					newStatus = "AT_PROCESSOR"
-				} else if strings.Contains(receiverOrg, "warehouse-") {
+				case "WAREHOUSE":
 					newStatus = "AT_WAREHOUSE"
-				} else {
-					newStatus = "RECEIVED" 
+				default:
+					newStatus = "RECEIVED"
 				}
 
 				newAssetID := fmt.Sprintf("%s-%d", newAssetIDPrefix, j)
@@ -193,7 +198,7 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 					ParentAssetIDs:   []string{item.AssetID},
 					ProductName:      parentAsset.ProductName,
 					Status:           newStatus,
-					OwnerOrg:         receiverOrg,
+					OwnerOrg:         receiverFacilityID,
 					OriginalQuantity: item.Quantity,
 					CurrentQuantity:  item.Quantity,
 					History:          []Event{*event},

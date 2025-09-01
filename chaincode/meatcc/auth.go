@@ -26,19 +26,38 @@ func requireRole(ctx contractapi.TransactionContextInterface, allowedRoles ...st
 
 // Kiểm tra client có phải là chủ sở hữu của asset không.
 func requireOwnership(ctx contractapi.TransactionContextInterface, asset *MeatAsset) error {
-	callerOrg, found, err := ctx.GetClientIdentity().GetAttributeValue("orgShortName")
+	callerFacilityID, found, err := ctx.GetClientIdentity().GetAttributeValue("facilityID")
 	if err != nil {
-		return fmt.Errorf("failed to get 'orgShortName' attribute: %v", err)
+		return fmt.Errorf("failed to get 'facilityID' attribute: %v", err)
 	}
 	if !found {
-		return fmt.Errorf("the client identity does not have an 'orgShortName' attribute")
+		return fmt.Errorf("the client identity does not have an 'facilityID' attribute")
 	}
 
-	if asset.OwnerOrg != callerOrg {
-		return fmt.Errorf("caller from org '%s' is not the owner of asset %s (owner is '%s')", callerOrg, asset.AssetID, asset.OwnerOrg)
+	if asset.OwnerOrg != callerFacilityID {
+		return fmt.Errorf("caller from facility '%s' is not the owner of asset %s (owner is '%s')", callerFacilityID, asset.AssetID, asset.OwnerOrg)
 	}
 
 	return nil
+}
+
+// Kiểm tra loại cơ sở của client có nằm trong danh sách cho phép không.
+func requireFacilityType(ctx contractapi.TransactionContextInterface, allowedTypes ...string) error {
+	facilityType, found, err := ctx.GetClientIdentity().GetAttributeValue("facilityType")
+	if err != nil {
+		return fmt.Errorf("failed to get 'facilityType' attribute: %v", err)
+	}
+	if !found {
+		return fmt.Errorf("the client identity does not have a 'facilityType' attribute")
+	}
+
+	for _, allowedType := range allowedTypes {
+		if facilityType == allowedType {
+			return nil // Hợp lệ
+		}
+	}
+
+	return fmt.Errorf("caller from facility type '%s' is not authorized for this action", facilityType)
 }
 
 // Trích xuất tên chung (CN) từ chứng chỉ của client, được sử dụng làm ID đăng ký.
