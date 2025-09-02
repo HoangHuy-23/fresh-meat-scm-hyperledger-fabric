@@ -58,6 +58,9 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
+
+	enroll
+	
 	parentAsset, err := s.readAsset(ctx, parentAssetID)
 	if err != nil {
 		return err
@@ -86,11 +89,6 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 		return fmt.Errorf("failed to unmarshal childAssetsJSON: %v", err)
 	}
 
-	clientMSP, _ := ctx.GetClientIdentity().GetMSPID()
-	txID := ctx.GetStub().GetTxID()
-	timestamp, _ := ctx.GetStub().GetTxTimestamp()
-	formattedTime := time.Unix(timestamp.Seconds, int64(timestamp.Nanos)).Format(time.RFC3339)
-
 	for _, child := range childAssets {
 		exists, err := s.assetExists(ctx, child.AssetID)
 		if err != nil {
@@ -100,12 +98,10 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 			return fmt.Errorf("child asset %s already exists", child.AssetID)
 		}
 
-		creationEvent := Event{
-			Type:      "CREATED_FROM_PROCESSING",
-			ActorMSP:  clientMSP,
-			Timestamp: formattedTime,
-			TxID:      txID,
-			Details:   fmt.Sprintf("Created from parent batch %s", parentAssetID),
+		details := fmt.Sprintf("Created from parent batch %s", parentAssetID)
+		creationEvent, err := s.createEvent(ctx, "CREATED_FROM_PROCESSING", details)
+		if err != nil {
+			return fmt.Errorf("failed to create event for child asset %s: %v", child.AssetID, err)
 		}
 
 		newChildAsset := MeatAsset{
@@ -220,11 +216,6 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
 		return fmt.Errorf("unit count (%d) exceeds parent batch quantity (%f)", unitCount, parentAsset.CurrentQuantity.Value)
 	}
 
-	clientMSP, _ := ctx.GetClientIdentity().GetMSPID()
-	txID := ctx.GetStub().GetTxID()
-	timestamp, _ := ctx.GetStub().GetTxTimestamp()
-	formattedTime := time.Unix(timestamp.Seconds, int64(timestamp.Nanos)).Format(time.RFC3339)
-
 	for i := 1; i <= unitCount; i++ {
 		unitAssetID := fmt.Sprintf("%s%d", unitIDPrefix, i)
 		exists, err := s.assetExists(ctx, unitAssetID)
@@ -235,12 +226,10 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
 			return fmt.Errorf("unit asset %s already exists", unitAssetID)
 		}
 
-		creationEvent := Event{
-			Type:      "CREATED_AS_UNIT",
-			ActorMSP:  clientMSP,
-			Timestamp: formattedTime,
-			TxID:      txID,
-			Details:   fmt.Sprintf("Split from product batch %s", parentAssetID),
+		details := fmt.Sprintf("Split from product batch %s", parentAssetID)
+		creationEvent, err := s.createEvent(ctx, "CREATED_AS_UNIT", details)
+		if err != nil {
+			return fmt.Errorf("failed to create event for unit asset %s: %v", unitAssetID, err)
 		}
 
 		unitQuantity := Quantity{
@@ -289,10 +278,14 @@ func (s *SmartContract) MarkAsSold(ctx contractapi.TransactionContextInterface, 
 		return fmt.Errorf("asset %s with status '%s' cannot be sold", assetID, asset.Status)
 	}
 
-	var soldDetails SoldDetails
+	var soldDetails map[string]interface{}
 	if err := json.Unmarshal([]byte(soldDetailsJSON), &soldDetails); err != nil {
 		return fmt.Errorf("failed to unmarshal soldDetailsJSON: %v", err)
 	}
+
+	txTimestamp := s.getTxTimestamp(ctx)
+
+	soldDetails["saleTimestamp"] = txTimestamp
 
 	return s.addEvent(ctx, asset, "SOLD", "SOLD", soldDetails)
 }

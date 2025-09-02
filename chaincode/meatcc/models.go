@@ -44,6 +44,7 @@ type ShipmentTimeline struct {
 	Type      string `json:"type"`
 	Timestamp string `json:"timestamp"`
 	Location  string `json:"location,omitempty"`
+	Proof     map[string]interface{} `json:"proof"`
 }
 
 // StorageDetails lưu thông tin về quá trình lưu kho.
