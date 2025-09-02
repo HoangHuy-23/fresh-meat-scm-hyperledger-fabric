@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
@@ -58,8 +57,6 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
-
-	enroll
 	
 	parentAsset, err := s.readAsset(ctx, parentAssetID)
 	if err != nil {
@@ -113,7 +110,7 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 			OwnerOrg:         parentAsset.OwnerOrg,
 			OriginalQuantity: child.Quantity,
 			CurrentQuantity:  child.Quantity,
-			History:          []Event{creationEvent},
+			History:          []Event{*creationEvent},
 		}
 		err = s.updateAsset(ctx, &newChildAsset)
 		if err != nil {
@@ -246,7 +243,7 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
 			OwnerOrg:         parentAsset.OwnerOrg,
 			OriginalQuantity: unitQuantity,
 			CurrentQuantity:  unitQuantity,
-			History:          []Event{creationEvent},
+			History:          []Event{*creationEvent},
 		}
 		err = s.updateAsset(ctx, &newUnitAsset)
 		if err != nil {

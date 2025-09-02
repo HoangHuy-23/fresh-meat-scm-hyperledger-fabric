@@ -82,7 +82,7 @@ func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterfac
 			pickupEvent := ShipmentTimeline{
 				Type:      "pickup_confirmed",
 				Timestamp: s.getTxTimestamp(ctx),
-				Location:  stop.FacilityAddress, // Lấy địa chỉ từ chính điểm dừng này
+				Location:  stop.FacilityAddress.FullText, // Lấy địa chỉ từ chính điểm dừng này
 				Proof:     proofDetails,          // Ghi lại URL và Hash
 			}
 			shipment.Timeline = append(shipment.Timeline, pickupEvent)
@@ -148,7 +148,7 @@ func (s *SmartContract) StartShipment(ctx contractapi.TransactionContextInterfac
 		if stop.Action == "PICKUP" && stop.Status == "COMPLETED" {
 			// Lấy địa điểm của điểm pickup đầu tiên làm địa điểm khởi hành
 			if departureLocation == "" {
-				departureLocation = stop.FacilityAddress // Lấy địa chỉ đầy đủ
+				departureLocation = stop.FacilityAddress.FullText // Lấy địa chỉ đầy đủ
 			}
 			// =====================
 			for _, item := range stop.Items {
@@ -215,7 +215,7 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 			arrivalEvent := ShipmentTimeline{
 				Type:      "arrival",
 				Timestamp: s.getTxTimestamp(ctx),
-				Location:  stop.FacilityAddress,
+				Location:  stop.FacilityAddress.FullText, // Lấy địa chỉ từ chính điểm dừng này
 				Proof:     proofDetails, 
 			}
 			shipment.Timeline = append(shipment.Timeline, arrivalEvent)
