@@ -13,10 +13,18 @@ type MediaPointer struct {
 	MimeType string `json:"mimeType"`
 }
 
+// Address lưu trữ thông tin địa chỉ.
+type Address struct {
+	FullText  string  `json:"fullText"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
 // FarmDetails lưu thông tin giai đoạn nuôi/trồng tại trang trại.
 type FarmDetails struct {
 	FacilityID   string         `json:"facilityID"`
 	FacilityName string         `json:"facilityName"`
+	Address      Address        `json:"address"`
 	SowingDate   string         `json:"sowingDate"`
 	HarvestDate  string         `json:"harvestDate"`
 	Fertilizers  []string       `json:"fertilizers"`
@@ -35,6 +43,7 @@ type ProcessingStep struct {
 type ProcessingDetails struct {
 	ProcessorOrgName string           `json:"processorOrgName"`
 	FacilityName     string           `json:"facilityName"`
+	Address          Address          `json:"address"`
 	Steps            []ProcessingStep `json:"steps"`
 	Certificates     []MediaPointer   `json:"certificates"`
 }
@@ -51,6 +60,7 @@ type ShipmentTimeline struct {
 type StorageDetails struct {
 	OwnerOrgName    string `json:"ownerOrgName"`
 	FacilityName    string `json:"facilityName"`
+	Address         Address `json:"address"`
 	LocationInStore string `json:"locationInStore,omitempty"`
 	Temperature     string `json:"temperature,omitempty"`
 	Note            string `json:"note"`
@@ -60,6 +70,7 @@ type StorageDetails struct {
 type SoldDetails struct {
 	RetailerOrgName string `json:"retailerOrgName"`
 	FacilityName    string `json:"facilityName"`
+	Address         Address `json:"address"`
 	SaleTimestamp   string `json:"saleTimestamp"`
 }
 
@@ -96,7 +107,7 @@ type ItemInShipment struct {
 type StopInJourney struct {
 	FacilityID      string           `json:"facilityID"`
 	FacilityName    string           `json:"facilityName"`    // <-- THÊM MỚI
-	FacilityAddress string           `json:"facilityAddress"` // <-- THÊM MỚI
+	FacilityAddress Address          `json:"facilityAddress"` // <-- THÊM MỚI
 	Action          string           `json:"action"`
 	Status          string           `json:"status"`
 	Items           []ItemInShipment `json:"items"`
