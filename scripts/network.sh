@@ -37,12 +37,18 @@ function printHelp() {
   echo "Sử dụng:
   network.sh <lệnh>
   Các lệnh:
-    - up:      Khởi động mạng lưới (tạo certs, chạy docker, tạo channel)
-    - down:    Dừng và xóa mạng lưới (dọn dẹp container, volume, crypto)
+    - up:       Khởi động mạng lưới (tạo certs, chạy docker, tạo channel)
+    - down:     Dừng và xóa mạng lưới (dọn dẹp container, volume, crypto)
+    - start:    Start lại các container đã tạo trước đó
+    - stop:     Stop tạm thời các container mà không xóa dữ liệu
+    - restart:  Restart toàn bộ container (không xóa dữ liệu)
     - deployCC: Triển khai chaincode lên channel
   Ví dụ:
     ./scripts/network.sh up
     ./scripts/network.sh deployCC
+    ./scripts/network.sh stop
+    ./scripts/network.sh start
+    ./scripts/network.sh restart
     ./scripts/network.sh down"
 }
 
@@ -93,15 +99,43 @@ function deployCC() {
   echo -e "${GREEN}--- Triển khai chaincode hoàn tất! ---${NC}"
 }
 
+function networkStart() {
+  echo -e "${GREEN}--- Đang khởi động lại mạng lưới... ---${NC}"
+  docker-compose -f network/docker/docker-compose.yaml start
+  docker-compose -f network/docker/docker-compose-ca.yaml start
+  echo -e "${GREEN}--- Mạng đã được start lại! ---${NC}"
+}
+
+function networkStop() {
+  echo -e "${GREEN}--- Đang tạm dừng mạng lưới... ---${NC}"
+  docker-compose -f network/docker/docker-compose.yaml stop
+  docker-compose -f network/docker/docker-compose-ca.yaml stop
+  echo -e "${GREEN}--- Mạng đã được stop tạm thời! ---${NC}"
+}
+
+function networkRestart() {
+  echo -e "${GREEN}--- Đang restart toàn bộ container... ---${NC}"
+  docker-compose -f network/docker/docker-compose.yaml restart
+  docker-compose -f network/docker/docker-compose-ca.yaml restart
+  echo -e "${GREEN}--- Restart hoàn tất! ---${NC}"
+}
+
 # --- Xử lý tham số đầu vào ---
 MODE=$1
 if [ "$MODE" == "up" ]; then
   networkUp
 elif [ "$MODE" == "down" ]; then
   networkDown
+elif [ "$MODE" == "start" ]; then
+  networkStart
+elif [ "$MODE" == "stop" ]; then
+  networkStop
+elif [ "$MODE" == "restart" ]; then
+  networkRestart
 elif [ "$MODE" == "deployCC" ]; then
   deployCC
 else
   printHelp
   exit 1
 fi
+
