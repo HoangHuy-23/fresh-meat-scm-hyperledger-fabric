@@ -286,3 +286,49 @@ func (s *SmartContract) MarkAsSold(ctx contractapi.TransactionContextInterface, 
 
 	return s.addEvent(ctx, asset, "SOLD", "SOLD", soldDetails)
 }
+
+// QueryAssetsByFacility thực hiện một truy vấn CouchDB để tìm tất cả các asset
+// được tạo ra bởi một facility cụ thể.
+func (s *SmartContract) QueryAssetsByFacility(ctx contractapi.TransactionContextInterface, facilityID string) ([]*MeatAsset, error) {
+	// Xây dựng chuỗi truy vấn CouchDB.
+	// Cú pháp này tìm kiếm các document có docType là "MeatAsset" VÀ
+	// trong mảng "history", có ít nhất một phần tử (elemMatch)
+	// mà phần tử đó có "type" là "FARMING" VÀ "details.facilityID" khớp với giá trị cung cấp.
+	queryString := fmt.Sprintf(`{
+		"selector": {
+			"docType": "MeatAsset",
+			"history": {
+				"$elemMatch": {
+					"type": "FARMING",
+					"details.facilityID": "%s"
+				}
+			}
+		}
+	}`, facilityID)
+
+	// GetQueryResult thực thi truy vấn trên world state
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute rich query: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var assets []*MeatAsset
+	// Lặp qua kết quả trả về
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		var asset MeatAsset
+		// Unmarshal giá trị JSON vào struct MeatAsset
+		err = json.Unmarshal(queryResponse.Value, &asset)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, &asset)
+	}
+
+	return assets, nil
+}

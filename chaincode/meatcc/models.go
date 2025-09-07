@@ -25,10 +25,11 @@ type FarmDetails struct {
 	FacilityID   string         `json:"facilityID"`
 	FacilityName string         `json:"facilityName"`
 	Address      Address        `json:"address"`
-	SowingDate   string         `json:"sowingDate"`
+	StartDate    string         `json:"startDate"`
+	ExpectedHarvestDate string         `json:"expectedHarvestDate"`
 	HarvestDate  string         `json:"harvestDate"`
-	Fertilizers  []string       `json:"fertilizers"`
-	Pesticides   []string       `json:"pesticides"`
+	Feed        []string       `json:"feed"`
+	Medications   []string       `json:"medications"`
 	Certificates []MediaPointer `json:"certificates"`
 }
 
@@ -53,6 +54,7 @@ type ShipmentTimeline struct {
 	Type      string `json:"type"`
 	Timestamp string `json:"timestamp"`
 	Location  string `json:"location,omitempty"`
+	FacilityID string `json:"facilityID"`
 	Proof     map[string]interface{} `json:"proof"`
 }
 
