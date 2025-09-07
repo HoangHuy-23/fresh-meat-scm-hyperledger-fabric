@@ -83,6 +83,7 @@ func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterfac
 				Type:      "pickup_confirmed",
 				Timestamp: s.getTxTimestamp(ctx),
 				Location:  stop.FacilityAddress.FullText, // Lấy địa chỉ từ chính điểm dừng này
+				FacilityID: stop.FacilityID,
 				Proof:     proofDetails,          // Ghi lại URL và Hash
 			}
 			shipment.Timeline = append(shipment.Timeline, pickupEvent)
@@ -175,6 +176,7 @@ func (s *SmartContract) StartShipment(ctx contractapi.TransactionContextInterfac
 		Type:      "departure",
 		Timestamp: s.getTxTimestamp(ctx),
 		Location:  departureLocation,
+		FacilityID: "", // Không có FacilityID cụ thể cho sự kiện khởi hành
 		Proof:     make(map[string]interface{}), // Không có bằng chứng cụ thể lúc này
 	}
 	shipment.Timeline = append(shipment.Timeline, timelineEvent)
@@ -216,6 +218,7 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 				Type:      "arrival",
 				Timestamp: s.getTxTimestamp(ctx),
 				Location:  stop.FacilityAddress.FullText, // Lấy địa chỉ từ chính điểm dừng này
+				FacilityID: stop.FacilityID,
 				Proof:     proofDetails, 
 			}
 			shipment.Timeline = append(shipment.Timeline, arrivalEvent)
@@ -286,4 +289,44 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 // Đây là một chức năng truy vấn có thể được gọi thông qua EvaluateTransaction.
 func (s *SmartContract) GetShipment(ctx contractapi.TransactionContextInterface, shipmentID string) (*ShipmentAsset, error) {
 	return s.readShipmentAsset(ctx, shipmentID)
+}
+
+// QueryShipmentsByDriver thực hiện một truy vấn CouchDB để tìm tất cả các lô hàng
+// được gán cho một tài xế cụ thể.
+func (s *SmartContract) QueryShipmentsByDriver(ctx contractapi.TransactionContextInterface, driverEnrollmentID string) ([]*ShipmentAsset, error) {
+	// Xây dựng chuỗi truy vấn CouchDB.
+	// Cú pháp này tìm kiếm các document có docType là "ShipmentAsset" VÀ
+	// có trường "driverEnrollmentID" khớp với giá trị cung cấp.
+	queryString := fmt.Sprintf(`{
+		"selector": {
+			"docType": "ShipmentAsset",
+			"driverEnrollmentID": "%s"
+		}
+	}`, driverEnrollmentID)
+
+	// GetQueryResult thực thi truy vấn trên world state
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute rich query: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var shipments []*ShipmentAsset
+	// Lặp qua kết quả trả về
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		var shipment ShipmentAsset
+		// Unmarshal giá trị JSON vào struct ShipmentAsset
+		err = json.Unmarshal(queryResponse.Value, &shipment)
+		if err != nil {
+			return nil, err
+		}
+		shipments = append(shipments, &shipment)
+	}
+
+	return shipments, nil
 }
