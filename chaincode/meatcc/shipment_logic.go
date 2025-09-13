@@ -50,8 +50,49 @@ func (s *SmartContract) CreateShipment(ctx contractapi.TransactionContextInterfa
 	return s.updateShipment(ctx, &shipment)
 }
 
+// AddPickupProof cho phép tài xế ghi lại bằng chứng đã lấy hàng vào Timeline.
+func (s *SmartContract) AddPickupProof(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, proofJSON string) error {
+	// Chỉ tài xế được gán cho lô hàng này mới có thể gọi
+	shipment, err := s.readShipmentAsset(ctx, shipmentID)
+	if err != nil {
+		return err
+	}
+	if err := requireAssignedDriver(ctx, shipment); err != nil {
+		return err
+	}
+
+	// Unmarshal proofJSON để sử dụng
+	var proofDetails map[string]interface{}
+	if err := json.Unmarshal([]byte(proofJSON), &proofDetails); err != nil {
+		return fmt.Errorf("failed to unmarshal proofJSON: %v", err)
+	}
+
+	// Tìm đúng điểm dừng để lấy địa chỉ
+	var stopLocation string
+	for _, stop := range shipment.Stops {
+		if stop.FacilityID == facilityID {
+			stopLocation = stop.FacilityAddress.FullText
+			break
+		}
+	}
+	if stopLocation == "" {
+		return fmt.Errorf("no stop found for facility %s in shipment %s", facilityID, shipmentID)
+	}
+
+	// Tạo sự kiện mới và thêm vào Timeline
+	proofEvent := ShipmentTimeline{
+		Type:      "pickup_proof_added",
+		Timestamp: s.getTxTimestamp(ctx),
+		Location:  stopLocation,
+		Proof:     proofDetails,
+	}
+	shipment.Timeline = append(shipment.Timeline, proofEvent)
+
+	return s.updateShipment(ctx, shipment)
+}
+
 // Xác nhận việc lấy hàng tại một điểm dừng, cập nhật số lượng asset và trạng thái điểm dừng thành COMPLETED.
-func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, actualItemsJSON string, proofJSON string) error {
+func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, actualItemsJSON string) error {
 	shipment, err := s.readShipmentAsset(ctx, shipmentID)
 	if err != nil {
 		return err
@@ -60,10 +101,16 @@ func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterfac
 		return fmt.Errorf("shipment %s is not in PENDING state", shipmentID)
 	}
 
-	// Unmarshal proofJSON để kiểm tra
-	var proofDetails map[string]interface{}
-	if err := json.Unmarshal([]byte(proofJSON), &proofDetails); err != nil {
-		return fmt.Errorf("failed to unmarshal proofJSON: %v", err)
+	proofExists := false
+	for _, event := range shipment.Timeline {
+		if event.Type == "pickup_proof_added" && event.Proof["facilityID"] == facilityID {
+			proofExists = true
+			break
+		}
+	}
+
+	if !proofExists {
+		return fmt.Errorf("pickup proof for facility %s has not been added by the driver yet", facilityID)
 	}
 
 	var actualItems []ItemInShipment
@@ -78,16 +125,14 @@ func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterfac
 				return err
 			}
 
-			// === PHẦN NÂNG CẤP: GHI LẠI SỰ KIỆN PICKUP ===
 			pickupEvent := ShipmentTimeline{
 				Type:      "pickup_confirmed",
 				Timestamp: s.getTxTimestamp(ctx),
-				Location:  stop.FacilityAddress.FullText, // Lấy địa chỉ từ chính điểm dừng này
+				Location:  stop.FacilityAddress.FullText, 
 				FacilityID: stop.FacilityID,
-				Proof:     proofDetails,          // Ghi lại URL và Hash
+				Proof:     make(map[string]interface{}), // Không có bằng chứng cụ thể lúc này         
 			}
 			shipment.Timeline = append(shipment.Timeline, pickupEvent)
-			// =============================================
 
 			for _, actualItem := range actualItems {
 				asset, err := s.readAsset(ctx, actualItem.AssetID)
@@ -107,7 +152,7 @@ func (s *SmartContract) ConfirmPickup(ctx contractapi.TransactionContextInterfac
 				eventDetails := map[string]interface{}{
 					"shipmentID": shipmentID,
 					"quantity":   actualItem.Quantity,
-					"proof":      proofDetails, // Ghi lại URL và Hash
+					"proof":      make(map[string]interface{}), // Không có bằng chứng cụ thể lúc này
 				}
 				err = s.addEvent(ctx, asset, "PICKED_UP_FOR_SHIPMENT", asset.Status, eventDetails)
 				if err != nil {
@@ -184,8 +229,49 @@ func (s *SmartContract) StartShipment(ctx contractapi.TransactionContextInterfac
 	return s.updateShipment(ctx, shipment)
 }
 
+// AddDeliveryProof cho phép tài xế ghi lại bằng chứng đã giao hàng vào Timeline.
+func (s *SmartContract) AddDeliveryProof(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, proofJSON string) error {
+	// Chỉ tài xế được gán cho lô hàng này mới có thể gọi
+	shipment, err := s.readShipmentAsset(ctx, shipmentID)
+	if err != nil {
+		return err
+	}
+	if err := requireAssignedDriver(ctx, shipment); err != nil {
+		return err
+	}
+
+	// Unmarshal proofJSON để sử dụng
+	var proofDetails map[string]interface{}
+	if err := json.Unmarshal([]byte(proofJSON), &proofDetails); err != nil {
+		return fmt.Errorf("failed to unmarshal proofJSON: %v", err)
+	}
+
+	// Tìm đúng điểm dừng để lấy địa chỉ
+	var stopLocation string
+	for _, stop := range shipment.Stops {
+		if stop.FacilityID == facilityID {
+			stopLocation = stop.FacilityAddress.FullText
+			break
+		}
+	}
+	if stopLocation == "" {
+		return fmt.Errorf("no stop found for facility %s in shipment %s", facilityID, shipmentID)
+	}
+
+	// Tạo sự kiện mới và thêm vào Timeline
+	proofEvent := ShipmentTimeline{
+		Type:      "delivery_proof_added", // <-- TÊN SỰ KIỆN MỚI
+		Timestamp: s.getTxTimestamp(ctx),
+		Location:  stopLocation,
+		Proof:     proofDetails,
+	}
+	shipment.Timeline = append(shipment.Timeline, proofEvent)
+
+	return s.updateShipment(ctx, shipment)
+}
+
 // Xác nhận việc giao hàng tại một điểm dừng, tạo asset mới cho bên nhận và cập nhật trạng thái shipment nếu đã giao hết.
-func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, newAssetIDPrefix string, proofJSON string) error {
+func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionContextInterface, shipmentID string, facilityID string, newAssetIDPrefix string) error {
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
@@ -193,11 +279,6 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 	receiverFacilityID, _, _ := ctx.GetClientIdentity().GetAttributeValue("facilityID")   
 	receiverFacilityType, _, _ := ctx.GetClientIdentity().GetAttributeValue("facilityType") 
 
-	// Unmarshal proofJSON để sử dụng
-	var proofDetails map[string]interface{}
-	if err := json.Unmarshal([]byte(proofJSON), &proofDetails); err != nil {
-		return fmt.Errorf("failed to unmarshal proofJSON: %v", err)
-	}
 
 	shipment, err := s.readShipmentAsset(ctx, shipmentID)
 	if err != nil {
@@ -207,22 +288,31 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 		return fmt.Errorf("shipment %s is not in transit", shipmentID)
 	}
 
+	proofExists := false
+	for _, event := range shipment.Timeline {
+		if event.Type == "delivery_proof_added" && event.Proof["facilityID"] == facilityID {
+			proofExists = true
+			break
+		}
+	}
+	if !proofExists {
+		return fmt.Errorf("delivery proof for facility %s has not been added by the driver yet", facilityID)
+	}
+
 	stopFound := false
 	for i, stop := range shipment.Stops {
 		if stop.FacilityID == facilityID && stop.Action == "DELIVERY" && stop.Status == "PENDING" {
 			stopFound = true
 			shipment.Stops[i].Status = "COMPLETED"
 
-			// === NÂNG CẤP SỰ KIỆN ARRIVAL ===
 			arrivalEvent := ShipmentTimeline{
 				Type:      "arrival",
 				Timestamp: s.getTxTimestamp(ctx),
-				Location:  stop.FacilityAddress.FullText, // Lấy địa chỉ từ chính điểm dừng này
+				Location:  stop.FacilityAddress.FullText, 
 				FacilityID: stop.FacilityID,
-				Proof:     proofDetails, 
+				Proof:     make(map[string]interface{}), // Không có bằng chứng cụ thể lúc này
 			}
 			shipment.Timeline = append(shipment.Timeline, arrivalEvent)
-			// =================================
 
 			for j, item := range stop.Items {
 				parentAsset, err := s.readAsset(ctx, item.AssetID)

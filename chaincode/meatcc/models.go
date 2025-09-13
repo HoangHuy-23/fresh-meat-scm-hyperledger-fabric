@@ -25,6 +25,7 @@ type FarmDetails struct {
 	FacilityID   string         `json:"facilityID"`
 	FacilityName string         `json:"facilityName"`
 	Address      Address        `json:"address"`
+	SowingDate   string         `json:"sowingDate"`
 	StartDate    string         `json:"startDate"`
 	ExpectedHarvestDate string         `json:"expectedHarvestDate"`
 	HarvestDate  string         `json:"harvestDate"`

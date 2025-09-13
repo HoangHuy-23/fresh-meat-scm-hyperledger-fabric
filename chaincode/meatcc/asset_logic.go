@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
@@ -330,5 +331,28 @@ func (s *SmartContract) QueryAssetsByFacility(ctx contractapi.TransactionContext
 		assets = append(assets, &asset)
 	}
 
+	// Sắp xếp mảng 'assets' dựa trên timestamp của sự kiện FARMING.
+	sort.Slice(assets, func(i, j int) bool {
+		// Lấy timestamp của sự kiện FARMING cho hai asset đang được so sánh.
+		tsI := getFarmingTimestamp(assets[i])
+		tsJ := getFarmingTimestamp(assets[j])
+
+		// So sánh chuỗi timestamp. Vì chúng ta dùng định dạng RFC3339 (ISO 8601),
+		// việc so sánh chuỗi cũng tương đương với so sánh thời gian.
+		// Trả về true nếu asset I "lớn hơn" (mới hơn) asset J.
+		return tsI > tsJ
+	})
+
 	return assets, nil
+}
+
+// getFarmingTimestamp là một hàm helper để tìm timestamp của sự kiện FARMING.
+// Điều này giúp cho logic sắp xếp trở nên sạch sẽ hơn.
+func getFarmingTimestamp(asset *MeatAsset) string {
+	for _, event := range asset.History {
+		if event.Type == "FARMING" {
+			return event.Timestamp
+		}
+	}
+	return "" // Trả về chuỗi rỗng nếu không tìm thấy
 }
