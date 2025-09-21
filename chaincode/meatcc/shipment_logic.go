@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
@@ -417,6 +418,57 @@ func (s *SmartContract) QueryShipmentsByDriver(ctx contractapi.TransactionContex
 		}
 		shipments = append(shipments, &shipment)
 	}
+
+	return shipments, nil
+}
+
+// QueryShipmentsByFacility thực hiện một truy vấn CouchDB để tìm tất cả các lô hàng
+// có liên quan đến một cơ sở cụ thể (là một điểm dừng trong lộ trình).
+func (s *SmartContract) QueryShipmentsByFacility(ctx contractapi.TransactionContextInterface, facilityID string) ([]*ShipmentAsset, error) {
+	// Xây dựng chuỗi truy vấn CouchDB.
+	// Cú pháp này tìm kiếm các document có docType là "ShipmentAsset" VÀ
+	// trong mảng "stops", có ít nhất một phần tử (elemMatch)
+	// mà "facilityID" của phần tử đó khớp với giá trị cung cấp.
+	queryString := fmt.Sprintf(`{
+		"selector": {
+			"docType": "ShipmentAsset",
+			"stops": {
+				"$elemMatch": {
+					"facilityID": "%s"
+				}
+			}
+		}
+	}`, facilityID)
+
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute rich query: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var shipments []*ShipmentAsset
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		var shipment ShipmentAsset
+		err = json.Unmarshal(queryResponse.Value, &shipment)
+		if err != nil {
+			return nil, err
+		}
+		shipments = append(shipments, &shipment)
+	}
+
+	// Sắp xếp các lô hàng theo thời gian tạo (sự kiện đầu tiên trong history)
+	sort.Slice(shipments, func(i, j int) bool {
+		if len(shipments[i].History) == 0 { return false }
+		if len(shipments[j].History) == 0 { return true }
+		tsI := shipments[i].History[0].Timestamp
+		tsJ := shipments[j].History[0].Timestamp
+		return tsI > tsJ // Sắp xếp từ mới nhất đến cũ nhất
+	})
 
 	return shipments, nil
 }
