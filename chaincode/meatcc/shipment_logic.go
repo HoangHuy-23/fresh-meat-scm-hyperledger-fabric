@@ -472,3 +472,16 @@ func (s *SmartContract) QueryShipmentsByFacility(ctx contractapi.TransactionCont
 
 	return shipments, nil
 }
+
+
+// hàm để test hoàn thành 1 shipment theo shipmentID
+func (s *SmartContract) CompleteShipment(ctx contractapi.TransactionContextInterface, shipmentID string) error {
+	shipment, err := s.readShipmentAsset(ctx, shipmentID)
+	if err != nil {
+		return err
+	}
+
+	// Cập nhật trạng thái của shipment
+	shipment.Status = "COMPLETED"
+	return s.updateShipment(ctx, shipment)
+}
