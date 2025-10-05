@@ -9,7 +9,7 @@ import (
 )
 
 // Tạo một lô thịt mới tại trang trại, lưu thông tin số lượng và chi tiết trang trại, đồng thời ghi lại sự kiện FARMING.
-func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, productName string, quantityJSON string, farmDetailsJSON string) error {
+func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, productName string, sku string, quantityJSON string, farmDetailsJSON string) error {
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
@@ -41,6 +41,7 @@ func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInt
 	asset := MeatAsset{
 		ObjectType:       "MeatAsset",
 		AssetID:          assetID,
+		SKU:              sku,
 		ParentAssetIDs:   []string{},
 		ProductName:      productName,
 		Status:           "AT_FARM",
@@ -79,7 +80,7 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 
 	err = s.addEvent(ctx, parentAsset, "PROCESSING", "PROCESSED_AND_SPLIT", processingDetails)
 	if err != nil {
-		return err
+		return err 
 	}
 
 	var childAssets []ChildAssetInput
@@ -105,6 +106,7 @@ func (s *SmartContract) ProcessAndSplitBatch(ctx contractapi.TransactionContextI
 		newChildAsset := MeatAsset{
 			ObjectType:       "MeatAsset",
 			AssetID:          child.AssetID,
+			SKU:              child.SKU,
 			ParentAssetIDs:   []string{parentAssetID},
 			ProductName:      child.ProductName,
 			Status:           "PACKAGED",
