@@ -240,6 +240,7 @@ func (s *SmartContract) SplitBatchToUnits(ctx contractapi.TransactionContextInte
 		newUnitAsset := MeatAsset{
 			ObjectType:       "MeatAsset",
 			AssetID:          unitAssetID,
+			SKU:              parentAsset.SKU,
 			ParentAssetIDs:   []string{parentAssetID},
 			ProductName:      parentAsset.ProductName,
 			Status:           "ON_SHELF",
@@ -396,6 +397,52 @@ func (s *SmartContract) QueryAssetsAtProcessorByStatus(ctx contractapi.Transacti
 		return tsI > tsJ
 	})
 
+	return assets, nil
+}
+
+//QueryAssetsAtRetailerByStatus thực hiện một truy vấn CouchDB để tìm tất cả các asset
+// thuộc sở hữu của một nhà bán lẻ và có một trạng thái cụ thể.
+func (s *SmartContract) QueryAssetsAtRetailerByStatus(ctx contractapi.TransactionContextInterface, facilityID string, status string) ([]*MeatAsset, error) {
+	// Chỉ những người dùng thuộc chính cơ sở đó mới có quyền truy vấn
+	callerFacilityID, found, err := ctx.GetClientIdentity().GetAttributeValue("facilityID")
+	if err != nil || !found || callerFacilityID != facilityID {
+		return nil, fmt.Errorf("caller is not authorized to query assets for facility %s", facilityID)
+	}
+	// Xây dựng chuỗi truy vấn CouchDB.
+	queryString := fmt.Sprintf(`{
+		"selector": {
+			"docType": "MeatAsset",
+			"ownerOrg": "%s",
+			"status": "%s"
+		}
+	}`, facilityID, status)
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute rich query: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var assets []*MeatAsset
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+		var asset MeatAsset
+		err = json.Unmarshal(queryResponse.Value, &asset)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, &asset)
+	}
+	// Sắp xếp theo thời gian cập nhật cuối cùng (sự kiện cuối trong history)
+	sort.Slice(assets, func(i, j int) bool {
+		if len(assets[i].History) == 0 { return false }
+		if len(assets[j].History) == 0 { return true }
+		tsI := assets[i].History[len(assets[i].History)-1].Timestamp
+		tsJ := assets[j].History[len(assets[j].History)-1].Timestamp
+		return tsI > tsJ
+	})
 	return assets, nil
 }
 
