@@ -91,6 +91,7 @@ type Event struct {
 type MeatAsset struct {
 	ObjectType       string   `json:"docType"`
 	AssetID          string   `json:"assetID"`
+	SKU              string   `json:"sku"`
 	ParentAssetIDs   []string `json:"parentAssetIDs"`
 	ProductName      string   `json:"productName"`
 	Status           string   `json:"status"`
@@ -134,6 +135,7 @@ type ShipmentAsset struct {
 type ChildAssetInput struct {
 	AssetID     string   `json:"assetID"`
 	ProductName string   `json:"productName"`
+	SKU         string   `json:"sku"`
 	Quantity    Quantity `json:"quantity"`
 }
 
@@ -146,4 +148,16 @@ type FullAssetTrace struct {
 	OriginalQuantity Quantity `json:"originalQuantity"`
 	CurrentQuantity  Quantity `json:"currentQuantity"`
 	FullHistory      []Event  `json:"fullHistory"`
+}
+
+// Product defines a product in the catalog.
+type Product struct {
+	ObjectType  string  `json:"docType"`
+	SKU         string  `json:"sku"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Unit        string  `json:"unit"`
+	SourceType  string  `json:"sourceType"` //BEEF, PORK, CHICKEN
+	Category    string  `json:"category"`   //RAW_MATERIAL, FINISHED_GOOD
+	Active      bool    `json:"active"`
 }
