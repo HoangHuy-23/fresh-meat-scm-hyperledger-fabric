@@ -9,7 +9,7 @@ import (
 )
 
 // Tạo một lô thịt mới tại trang trại, lưu thông tin số lượng và chi tiết trang trại, đồng thời ghi lại sự kiện FARMING.
-func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, productName string, sku string, quantityJSON string, farmDetailsJSON string) error {
+func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, productName string, sku string, quantityJSON string, farmDetailsJSON string, averageWeightJSON string) error {
 	if err := requireRole(ctx, "admin", "worker"); err != nil {
 		return err
 	}
@@ -33,6 +33,11 @@ func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInt
 		return fmt.Errorf("failed to unmarshal farmDetailsJSON: %v", err)
 	}
 
+	var averageWeight Weight
+	if err := json.Unmarshal([]byte(averageWeightJSON), &averageWeight); err != nil {
+		return fmt.Errorf("failed to parse averageWeight JSON: %v", err)
+	}
+
 	event, err := s.createEvent(ctx, "FARMING", farmDetails)
 	if err != nil {
 		return err
@@ -42,6 +47,7 @@ func (s *SmartContract) CreateFarmingBatch(ctx contractapi.TransactionContextInt
 		ObjectType:       "MeatAsset",
 		AssetID:          assetID,
 		SKU:              sku,
+		AverageWeight:    averageWeight,
 		ParentAssetIDs:   []string{},
 		ProductName:      productName,
 		Status:           "AT_FARM",
@@ -444,6 +450,15 @@ func (s *SmartContract) QueryAssetsAtRetailerByStatus(ctx contractapi.Transactio
 		return tsI > tsJ
 	})
 	return assets, nil
+}
+
+//GetAsset thục hiện việc đọc một asset từ world state dựa trên assetID.
+func (s *SmartContract) GetAsset(ctx contractapi.TransactionContextInterface, assetID string) (*MeatAsset, error) {
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return nil, err
+	}
+	return asset, nil
 }
 
 // getFarmingTimestamp là một hàm helper để tìm timestamp của sự kiện FARMING.

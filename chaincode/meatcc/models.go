@@ -92,6 +92,7 @@ type MeatAsset struct {
 	ObjectType       string   `json:"docType"`
 	AssetID          string   `json:"assetID"`
 	SKU              string   `json:"sku"`
+	AverageWeight    Weight   `json:"averageWeight"`
 	ParentAssetIDs   []string `json:"parentAssetIDs"`
 	ProductName      string   `json:"productName"`
 	Status           string   `json:"status"`
@@ -150,14 +151,21 @@ type FullAssetTrace struct {
 	FullHistory      []Event  `json:"fullHistory"`
 }
 
+// Weight lưu thông tin cân nặng.
+type Weight struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"` // e.g., "kg", "g", "lb"
+}
+
 // Product defines a product in the catalog.
 type Product struct {
-	ObjectType  string  `json:"docType"`
-	SKU         string  `json:"sku"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Unit        string  `json:"unit"`
-	SourceType  string  `json:"sourceType"` //BEEF, PORK, CHICKEN
-	Category    string  `json:"category"`   //RAW_MATERIAL, FINISHED_GOOD
-	Active      bool    `json:"active"`
+	ObjectType    string  `json:"docType"`
+	SKU           string  `json:"sku"`
+	Name          string  `json:"name"`
+	Description   string  `json:"description"`
+	Unit          string  `json:"unit"` // e.g., "box", "tray", "piece"
+	AverageWeight Weight  `json:"averageWeight"` 
+	SourceType    string  `json:"sourceType"` //BEEF, PORK, CHICKEN
+	Category      string  `json:"category"`   //RAW_MATERIAL, FINISHED_GOOD
+	Active        bool    `json:"active"`
 }
