@@ -343,6 +343,7 @@ func (s *SmartContract) ConfirmShipmentDelivery(ctx contractapi.TransactionConte
 					ObjectType:       "MeatAsset",
 					AssetID:          newAssetID,
 					SKU:              parentAsset.SKU,
+					AverageWeight:    parentAsset.AverageWeight,
 					ParentAssetIDs:   []string{item.AssetID},
 					ProductName:      parentAsset.ProductName,
 					Status:           newStatus,

@@ -10,7 +10,7 @@ import (
 
 // CreateProduct tạo một sản phẩm mới trong danh mục.
 // Chỉ Super Admin mới có quyền gọi.
-func (s *SmartContract) CreateProduct(ctx contractapi.TransactionContextInterface, sku string, name string, description string, unit string, sourceType string, category string) error {
+func (s *SmartContract) CreateProduct(ctx contractapi.TransactionContextInterface, sku string, name string, description string, unit string, sourceType string, category string, averageWeightJSON string) error {
 	// if err := requireRole(ctx, "superadmin"); err != nil {
 	// 	return err
 	// }
@@ -22,6 +22,11 @@ func (s *SmartContract) CreateProduct(ctx contractapi.TransactionContextInterfac
 		return fmt.Errorf("product with name %s already exists", name)
 	}
 
+	var averageWeight Weight
+	if err := json.Unmarshal([]byte(averageWeightJSON), &averageWeight); err != nil {
+		return fmt.Errorf("failed to parse averageWeight JSON: %v", err)
+	}
+
 	product := Product{
 		ObjectType:  "Product",
 		SKU:         sku,
@@ -31,6 +36,7 @@ func (s *SmartContract) CreateProduct(ctx contractapi.TransactionContextInterfac
 		SourceType:  sourceType,
 		Category:    category,
 		Active:      true,
+		AverageWeight: averageWeight,
 	}
 	productJSON, _ := json.Marshal(product)
 	return ctx.GetStub().PutState(product.SKU, productJSON)
