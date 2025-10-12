@@ -42,21 +42,36 @@ func (s *SmartContract) CreateProduct(ctx contractapi.TransactionContextInterfac
 	return ctx.GetStub().PutState(product.SKU, productJSON)
 }
 
-// QueryProducts truy vấn danh sách sản phẩm theo loại nguồn và danh mục.
+// QueryProducts truy vấn danh sách sản phẩm linh động theo sourceType và category.
+// Nếu sourceType hoặc category = "", sẽ bỏ qua điều kiện đó.
 func (s *SmartContract) QueryProducts(ctx contractapi.TransactionContextInterface, sourceType string, category string) ([]*Product, error) {
-	queryString := fmt.Sprintf(`{
-		"selector":{
-			"docType":"Product",
-			"sourceType":"%s",
-			"category":"%s",
-			"active":true
-		}
-	}`, sourceType, category)
+	// Khởi tạo selector cơ bản
+	selector := map[string]interface{}{
+		"docType": "Product",
+		"active":  true,
+	}
 
-	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	// Thêm filter linh động
+	if sourceType != "" {
+		selector["sourceType"] = sourceType
+	}
+	if category != "" {
+		selector["category"] = category
+	}
 
+	// Xây dựng query JSON
+	query := map[string]interface{}{
+		"selector": selector,
+	}
+
+	queryBytes, err := json.Marshal(query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to build query: %v", err)
+	}
+
+	resultsIterator, err := ctx.GetStub().GetQueryResult(string(queryBytes))
+	if err != nil {
+		return nil, fmt.Errorf("query execution failed: %v", err)
 	}
 	defer resultsIterator.Close()
 
@@ -67,14 +82,15 @@ func (s *SmartContract) QueryProducts(ctx contractapi.TransactionContextInterfac
 			return nil, err
 		}
 		var product Product
-		err = json.Unmarshal(queryResponse.Value, &product)
-		if err != nil {
+		if err := json.Unmarshal(queryResponse.Value, &product); err != nil {
 			return nil, err
 		}
 		products = append(products, &product)
 	}
+
 	return products, nil
 }
+
 
 // GetProduct lấy thông tin chi tiết của một sản phẩm bằng SKU.
 func (s *SmartContract) GetProduct(ctx contractapi.TransactionContextInterface, sku string) (*Product, error) {

@@ -8,9 +8,14 @@ type Quantity struct {
 
 // MediaPointer là tham chiếu đến file media lưu ngoài blockchain.
 type MediaPointer struct {
-	S3Bucket string `json:"s3Bucket"`
-	S3Key    string `json:"s3Key"`
+	URL      string `json:"url"`
 	MimeType string `json:"mimeType"`
+}
+
+// Certificate lưu trữ thông tin về chứng nhận.
+type Certificate struct {
+	Name  string       `json:"name"`
+	Media MediaPointer `json:"media"`
 }
 
 // Address lưu trữ thông tin địa chỉ.
@@ -18,6 +23,23 @@ type Address struct {
 	FullText  string  `json:"fullText"`
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
+}
+
+// Feed lưu trữ thông tin về thức ăn.
+type Feed struct {
+    Name         string  `json:"name"`          // Tên loại thức ăn (vd: "Green Feed tập ăn")
+    DosageKg     float64 `json:"dosageKg"`      // Liều lượng mỗi ngày (kg/con hoặc kg/tổng đàn)
+    StartDate    string  `json:"startDate"`     // Ngày bắt đầu sử dụng (YYYY-MM-DD)
+    EndDate      string  `json:"endDate"`       // (Tùy chọn) Ngày kết thúc sử dụng
+    Notes        string  `json:"notes"`         // (Tùy chọn) Ghi chú thêm như "giai đoạn tập ăn", "tăng trọng"
+}
+
+// Medication lưu trữ thông tin về thuốc và chất bổ sung.
+type Medication struct {
+    Name         string  `json:"name"` 		// Tên thuốc/chất bổ sung (vd: "Vitamin C", "Thuốc giảm đau")
+    Dose         string  `json:"dose"` 	   // Liều dùng (vd: "500mg", "2ml/con")
+    DateApplied  string  `json:"dateApplied"` // Ngày áp dụng (YYYY-MM-DD)
+    NextDueDate  string  `json:"nextDueDate"` // (Tùy chọn) Ngày cần áp dụng tiếp theo
 }
 
 // FarmDetails lưu thông tin giai đoạn nuôi/trồng tại trang trại.
@@ -29,9 +51,9 @@ type FarmDetails struct {
 	StartDate    string         `json:"startDate"`
 	ExpectedHarvestDate string         `json:"expectedHarvestDate"`
 	HarvestDate  string         `json:"harvestDate"`
-	Feed        []string       `json:"feed"`
-	Medications   []string       `json:"medications"`
-	Certificates []MediaPointer `json:"certificates"`
+	Feeds        []Feed         `json:"feeds"` 
+	Medications   []Medication  `json:"medications"` 
+	Certificates []Certificate `json:"certificates"`
 }
 
 // ProcessingStep mô tả một bước trong quá trình chế biến.
@@ -47,7 +69,7 @@ type ProcessingDetails struct {
 	FacilityName     string           `json:"facilityName"`
 	Address          Address          `json:"address"`
 	Steps            []ProcessingStep `json:"steps"`
-	Certificates     []MediaPointer   `json:"certificates"`
+	Certificates     []Certificate    `json:"certificates"`
 }
 
 // ShipmentTimeline lưu mốc thời gian trong quá trình vận chuyển.
