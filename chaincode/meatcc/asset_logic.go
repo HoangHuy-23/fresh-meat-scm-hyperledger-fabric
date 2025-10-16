@@ -284,6 +284,29 @@ func (s *SmartContract) AddMedicationToFarmingBatch(ctx contractapi.TransactionC
 	return s.updateAsset(ctx, asset)
 }
 
+// UpdateAverageWeight cập nhật trọng lượng trung bình của một lô thịt.
+func (s *SmartContract) UpdateAverageWeight(ctx contractapi.TransactionContextInterface, assetID string, averageWeightJSON string) error {
+	if err := requireRole(ctx, "admin", "worker"); err != nil {
+		return err
+	}
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return err
+	}
+	if err := requireOwnership(ctx, asset); err != nil {
+		return err
+	}
+	if asset.Status != "AT_FARM" {
+		return fmt.Errorf("asset %s with status '%s' cannot be updated by the farm", assetID, asset.Status)
+	}
+	var newAverageWeight Weight
+	if err := json.Unmarshal([]byte(averageWeightJSON), &newAverageWeight); err != nil {
+		return fmt.Errorf("failed to parse averageWeight JSON: %v", err)
+	}
+	asset.AverageWeight = newAverageWeight
+	return s.updateAsset(ctx, asset)
+}
+
 // UpdateHarvestDate cập nhật ngày thu hoạch thực tế.
 func (s *SmartContract) UpdateHarvestDate(ctx contractapi.TransactionContextInterface, assetID string, harvestDate string) error {
 	// ... (logic tương tự, chỉ cập nhật một trường) ...
@@ -318,6 +341,40 @@ func (s *SmartContract) UpdateHarvestDate(ctx contractapi.TransactionContextInte
 	return s.updateAsset(ctx, asset)
 }
 
+// UpdateExpectedHarvestDate cập nhật ngày dự kiến thu hoạch.
+func (s *SmartContract) UpdateExpectedHarvestDate(ctx contractapi.TransactionContextInterface, assetID string, expectedHarvestDate string) error {
+	// ... (logic tương tự, chỉ cập nhật một trường) ...
+	if err := requireRole(ctx, "admin", "worker"); err != nil {
+		return err
+	}
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return err
+	}
+	if err := requireOwnership(ctx, asset); err != nil {
+		return err
+	}
+	if asset.Status != "AT_FARM" {
+		return fmt.Errorf("asset %s with status '%s' cannot be updated by the farm", assetID, asset.Status)
+	}
+	// Tìm sự kiện FARMING và cập nhật nó
+	updated := false
+	for i, event := range asset.History {
+		if event.Type == "FARMING" {
+			details, ok := event.Details.(map[string]interface{})
+			if !ok { return fmt.Errorf("could not parse farming details") }
+			details["expectedHarvestDate"] = expectedHarvestDate
+			asset.History[i].Details = details
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		return fmt.Errorf("could not find the original FARMING event to update for asset %s", assetID)
+	}
+	return s.updateAsset(ctx, asset)
+}
+
 // AddCertificatesToFarmingBatch thêm các chứng chỉ mới cho một lô hàng.
 func (s *SmartContract) AddCertificatesToFarmingBatch(ctx contractapi.TransactionContextInterface, assetID string, certificatesJSON string) error {
 	asset, err := s.readAsset(ctx, assetID)
@@ -332,7 +389,7 @@ func (s *SmartContract) AddCertificatesToFarmingBatch(ctx contractapi.Transactio
 	if asset.Status != "AT_FARM" {
 		return fmt.Errorf("asset %s with status '%s' cannot be updated by the farm", assetID, asset.Status)
 	}
-	var newCertificates []MediaPointer
+	var newCertificates []Certificate
 	if err := json.Unmarshal([]byte(certificatesJSON), &newCertificates); err != nil {
 		return fmt.Errorf("failed to unmarshal certificatesJSON: %v", err)
 	}
@@ -343,9 +400,9 @@ func (s *SmartContract) AddCertificatesToFarmingBatch(ctx contractapi.Transactio
 			if !ok { return fmt.Errorf("could not parse farming details") }
 			// Lấy mảng certificates hiện có
 			certsInterface, exists := details["certificates"]
-			var certificates []MediaPointer
+			var certificates []Certificate
 			if exists && certsInterface != nil {
-				// Chuyển đổi từ interface{} sang []MediaPointer
+				// Chuyển đổi từ interface{} sang []Certificate
 				certsJSON, _ := json.Marshal(certsInterface)
 				json.Unmarshal(certsJSON, &certificates)
 			}
@@ -357,6 +414,18 @@ func (s *SmartContract) AddCertificatesToFarmingBatch(ctx contractapi.Transactio
 		}
 	}
 	return s.updateAsset(ctx, asset)
+}
+
+// GetAssetAtFarmByID lấy một lô thịt tại trang trại dựa trên assetID.
+func (s *SmartContract) GetAssetAtFarmByID(ctx contractapi.TransactionContextInterface, assetID string) (*MeatAsset, error) {
+	asset, err := s.readAsset(ctx, assetID)
+	if err != nil {
+		return nil, err
+	}
+	if asset.Status != "AT_FARM" {
+		return nil, fmt.Errorf("asset %s with status '%s' is not at farm", assetID, asset.Status)
+	}
+	return asset, nil
 }
 
 // Cập nhật thông tin lưu kho cho một lô thịt, thêm sự kiện STORAGE_UPDATE vào lịch sử asset.
@@ -627,6 +696,40 @@ func (s *SmartContract) QueryAssetsAtRetailerByStatus(ctx contractapi.Transactio
 		tsJ := assets[j].History[len(assets[j].History)-1].Timestamp
 		return tsI > tsJ
 	})
+	return assets, nil
+}
+
+//QueryAssetsByFacilityAndSKU thực hiện một truy vấn CouchDB để tìm tất cả các asset
+// được tạo ra bởi một facility cụ thể và có SKU cụ thể.
+func (s *SmartContract) QueryAssetsByFacilityAndSKU(ctx contractapi.TransactionContextInterface, facilityID string, sku string) ([]*MeatAsset, error) {
+	// Xây dựng chuỗi truy vấn CouchDB.
+	queryString := fmt.Sprintf(`{
+        "selector": {
+            "docType": "MeatAsset",
+            "ownerOrg": "%s",
+            "sku": "%s",
+            "currentQuantity.value": { "$gt": 0 }
+        }
+    }`, facilityID, sku)
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute rich query: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var assets []*MeatAsset
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+		var asset MeatAsset
+		err = json.Unmarshal(queryResponse.Value, &asset)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, &asset)
+	}
 	return assets, nil
 }
 
