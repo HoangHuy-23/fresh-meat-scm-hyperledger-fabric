@@ -699,6 +699,40 @@ func (s *SmartContract) QueryAssetsAtRetailerByStatus(ctx contractapi.Transactio
 	return assets, nil
 }
 
+//QueryAssetsByFacilityAndSKU thực hiện một truy vấn CouchDB để tìm tất cả các asset
+// được tạo ra bởi một facility cụ thể và có SKU cụ thể.
+func (s *SmartContract) QueryAssetsByFacilityAndSKU(ctx contractapi.TransactionContextInterface, facilityID string, sku string) ([]*MeatAsset, error) {
+	// Xây dựng chuỗi truy vấn CouchDB.
+	queryString := fmt.Sprintf(`{
+        "selector": {
+            "docType": "MeatAsset",
+            "ownerOrg": "%s",
+            "sku": "%s",
+            "currentQuantity.value": { "$gt": 0 }
+        }
+    }`, facilityID, sku)
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute rich query: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var assets []*MeatAsset
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+		var asset MeatAsset
+		err = json.Unmarshal(queryResponse.Value, &asset)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, &asset)
+	}
+	return assets, nil
+}
+
 //GetAsset thục hiện việc đọc một asset từ world state dựa trên assetID.
 func (s *SmartContract) GetAsset(ctx contractapi.TransactionContextInterface, assetID string) (*MeatAsset, error) {
 	asset, err := s.readAsset(ctx, assetID)
